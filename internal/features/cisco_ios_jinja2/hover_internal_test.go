@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/keyword"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/keyword"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // TestBuildHoverContent_PlainTextFallback verifies that a keyword carrying only
-// a description produces the unchanged PlainText hover (chunter-97u).
+// a description produces the unchanged PlainText hover (chunt-97u).
 func TestBuildHoverContent_PlainTextFallback(t *testing.T) {
 	kw := keyword.Keyword{
 		Keyword: "sparse-cmd",
@@ -95,7 +95,7 @@ func TestBuildHoverContent_RichMarkdown(t *testing.T) {
 }
 
 // TestBuildHoverContent_FenceEscaping verifies that a code block containing
-// backticks gets a longer fence so it cannot terminate early (chunter-97u).
+// backticks gets a longer fence so it cannot terminate early (chunt-97u).
 func TestBuildHoverContent_FenceEscaping(t *testing.T) {
 	kw := keyword.Keyword{
 		Description: keyword.Description{Value: "d"},

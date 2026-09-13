@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // placeholderDefaultRe matches LSP snippet placeholders of the form ${N:default}
@@ -687,7 +687,7 @@ func TestArgumentPositionRegexDerived(t *testing.T) {
 
 // TestCompletionEnterModeDetail verifies that completion items for mode-opening
 // commands indicate the config sub-mode they enter, derived from the keyword's
-// EnterMode field (chunter-fj1). It also verifies the carve-outs: a negated
+// EnterMode field (chunt-fj1). It also verifies the carve-outs: a negated
 // form ("no interface") and a non-mode-opening command ("hostname") carry no
 // entered-mode Detail.
 func TestCompletionEnterModeDetail(t *testing.T) {

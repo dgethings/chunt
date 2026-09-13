@@ -1,8 +1,8 @@
-# chunter
+# chunt
 
 A [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) implementation for **Cisco IOS configuration files with Jinja2 templating** (`.ios.j2`).
 
-chunter parses `running-config` style files and templates and surfaces structural errors, missing definitions, and cross-reference issues that the IOS CLI itself won't flag until deploy time. It also provides hover documentation, completion, go-to-definition, find-references, and document outlines for editors that speak LSP.
+chunt parses `running-config` style files and templates and surfaces structural errors, missing definitions, and cross-reference issues that the IOS CLI itself won't flag until deploy time. It also provides hover documentation, completion, go-to-definition, find-references, and document outlines for editors that speak LSP.
 
 Powered by a dedicated [tree-sitter-cisco-ios-jinja2](https://github.com/dgethings/tree-sitter-cisco-ios-jinja2) grammar.
 
@@ -31,20 +31,20 @@ Four families of diagnostics, all anchored precisely on the offending token:
 Example:
 
 ```bash
-$ chunter check site-a.ios.j2
-site-a.ios.j2:1:1:  [chunter] section "interface GigabitEthernet0/0" is missing its terminating "!"
-site-a.ios.j2:5:18:  [chunter] undefined acl "ACL-OUT"
-site-a.ios.j2:6:22:  [chunter] undefined route-map "RM-OUT"
-site-a.ios.j2:9:19:  [chunter] undefined acl "ACL-VOICE"
-site-a.ios.j2:13:11: [chunter] duplicate route-map definition "RM1"
-site-a.ios.j2:20:1:  [chunter] running version and configured version mismatch
+$ chunt check site-a.ios.j2
+site-a.ios.j2:1:1:  [chunt] section "interface GigabitEthernet0/0" is missing its terminating "!"
+site-a.ios.j2:5:18:  [chunt] undefined acl "ACL-OUT"
+site-a.ios.j2:6:22:  [chunt] undefined route-map "RM-OUT"
+site-a.ios.j2:9:19:  [chunt] undefined acl "ACL-VOICE"
+site-a.ios.j2:13:11: [chunt] duplicate route-map definition "RM1"
+site-a.ios.j2:20:1:  [chunt] running version and configured version mismatch
 ```
 
 Same diagnostics show up as red/yellow squiggles in any LSP-aware editor.
 
 ### Entities tracked
 
-chunter builds a per-file symbol table for the following IOS named entities and resolves references between them:
+chunt builds a per-file symbol table for the following IOS named entities and resolves references between them:
 
 | Kind | Definition sites | Reference introducers |
 | --- | --- | --- |
@@ -78,9 +78,9 @@ Hover returns the same description text in plaintext form. Typing a keyword with
 ### From source
 
 ```bash
-git clone https://github.com/dgethings/chunter
-cd chunter
-make                                    # builds bin/chunter
+git clone https://github.com/dgethings/chunt
+cd chunt
+make                                    # builds bin/chunt
 ```
 
 The tree-sitter grammar is a normal Go dependency (published at [github.com/dgethings/tree-sitter-cisco-ios-jinja2](https://github.com/dgethings/tree-sitter-cisco-ios-jinja2)); `make` fetches it from the module proxy — **no sibling checkout is required to build or test**. CGO is required (tree-sitter is C); the Makefile sets `CGO_ENABLED=1` automatically.
@@ -92,9 +92,9 @@ make grammar-bump                        # to @latest
 make grammar-bump GRAMMAR_VERSION=v0.3.1  # to a specific tag
 ```
 
-The version is the `require` line in `go.mod`; `chunter version` also prints it.
+The version is the `require` line in `go.mod`; `chunt version` also prints it.
 
-**Contributing to the grammar alongside chunter:** clone the sibling repo next to chunter and run `make workspace` to write a machine-local, gitignored `go.work` that points chunter at your local grammar tree (normal clone or git-worktree checkout — both are auto-detected) instead of the published module:
+**Contributing to the grammar alongside chunt:** clone the sibling repo next to chunt and run `make workspace` to write a machine-local, gitignored `go.work` that points chunt at your local grammar tree (normal clone or git-worktree checkout — both are auto-detected) instead of the published module:
 
 ```bash
 git clone https://github.com/dgethings/tree-sitter-cisco-ios-jinja2 ../tree-sitter-cisco-ios-jinja2
@@ -107,13 +107,13 @@ Remove `go.work` (or `make clean-workspace`) to revert to the published module.
 
 ### Binary
 
-Pre-built binaries are published on the [releases page](https://github.com/dgethings/chunter/releases) for darwin/linux on amd64 and arm64.
+Pre-built binaries are published on the [releases page](https://github.com/dgethings/chunt/releases) for darwin/linux on amd64 and arm64.
 
 ---
 
 ## Editor integration
 
-chunter speaks LSP over stdio. Configure it like any other language server.
+chunt speaks LSP over stdio. Configure it like any other language server.
 
 ### Neovim (builtin LSP)
 
@@ -123,45 +123,45 @@ vim.filetype.add({
   pattern = { [".*%.ios%.j2"] = "cisco_ios_jinja2" },
 })
 
-vim.lsp.config("chunter", {
-  cmd = { "/path/to/chunter", "serve" },
+vim.lsp.config("chunt", {
+  cmd = { "/path/to/chunt", "serve" },
   filetypes = { "cisco_ios_jinja2" },
   root_markers = { ".git" },
 })
-vim.lsp.enable("chunter")
+vim.lsp.enable("chunt")
 ```
 
 For syntax highlighting via tree-sitter (separate from the LSP), install the [tree-sitter-cisco-ios-jinja2](https://github.com/dgethings/tree-sitter-cisco-ios-jinja2) grammar with your plugin manager of choice, or copy the queries from this repo's `queries/` directory into your runtimepath.
 
 ### VS Code
 
-Install a generic LSP client extension (e.g. [Generic LSP](https://marketplace.visualstudio.com/items?itemName=antonkaschenko.generic-lsp)) and point it at `chunter serve` for the `cisco_ios_jinja2` language ID.
+Install a generic LSP client extension (e.g. [Generic LSP](https://marketplace.visualstudio.com/items?itemName=antonkaschenko.generic-lsp)) and point it at `chunt serve` for the `cisco_ios_jinja2` language ID.
 
 ### Helix
 
 ```toml
 # ~/.config/helix/languages.toml
-[language-server.chunter]
-command = "chunter"
+[language-server.chunt]
+command = "chunt"
 args = ["serve"]
 
 [[language]]
 name = "cisco_ios_jinja2"
 scope = "source.ios.j2"
 file-types = [{ suffix = ".ios.j2" }]
-language-servers = [ "chunter" ]
+language-servers = [ "chunt" ]
 ```
 
 ---
 
 ## CLI usage
 
-`chunter` has three subcommands:
+`chunt` has three subcommands:
 
 ```
-chunter serve                  # run as an LSP server over stdio (the default mode for editors)
-chunter check <file>           # one-off diagnostic run; prints in compiler-output format
-chunter version                # print the version
+chunt serve                  # run as an LSP server over stdio (the default mode for editors)
+chunt check <file>           # one-off diagnostic run; prints in compiler-output format
+chunt version                # print the version
 ```
 
 Global flag:
@@ -172,15 +172,15 @@ Global flag:
 
 ### CI / pre-commit
 
-`chunter check` exits 0 on a clean file and prints diagnostics (exit 0 — it does not fail the run unless you wrap it). A typical pre-commit hook:
+`chunt check` exits 0 on a clean file and prints diagnostics (exit 0 — it does not fail the run unless you wrap it). A typical pre-commit hook:
 
 ```bash
 #!/bin/sh
-# Run chunter over every templated config in the repo
+# Run chunt over every templated config in the repo
 status=0
 for f in $(find . -name '*.ios.j2'); do
-  if ! chunter check "$f" | grep -q .; then :; else
-    chunter check "$f"
+  if ! chunt check "$f" | grep -q .; then :; else
+    chunt check "$f"
     status=1
   fi
 done
@@ -218,17 +218,17 @@ service-policy input QOS
 - `QOS` is correctly defined and referenced.
 
 ```bash
-$ chunter check site-a.ios.j2
-site-a.ios.j2:5:18:  [chunter] undefined acl "ACL-OUT"
-site-a.ios.j2:6:22:  [chunter] undefined route-map "RM-OUT"
-site-a.ios.j2:9:19:  [chunter] undefined acl "ACL-VOICE"
+$ chunt check site-a.ios.j2
+site-a.ios.j2:5:18:  [chunt] undefined acl "ACL-OUT"
+site-a.ios.j2:6:22:  [chunt] undefined route-map "RM-OUT"
+site-a.ios.j2:9:19:  [chunt] undefined acl "ACL-VOICE"
 ```
 
 In an editor with LSP integration, the same information shows up as inline squiggles, and:
 
 - Hovering over `ACL-OUT` shows nothing extra (no docs for user-defined names) but Go-To-Definition is disabled because there is no target.
 - Defining `ip access-list standard ACL-OUT` somewhere in the file makes the warning disappear.
-- From a defined `ACL-OUT`, `chunter` Find-References returns every `ip access-group ACL-OUT`, `access-class ACL-OUT`, and `match ip address ACL-OUT` site.
+- From a defined `ACL-OUT`, `chunt` Find-References returns every `ip access-group ACL-OUT`, `access-class ACL-OUT`, and `match ip address ACL-OUT` site.
 - The document outline lists `r1` (router), `GigabitEthernet0/0` (interface), `VOICE` (class-map), `QOS` (policy-map) as top-level entries.
 
 ---
@@ -236,7 +236,7 @@ In an editor with LSP integration, the same information shows up as inline squig
 ## Project layout
 
 ```
-chunter/
+chunt/
 ├── cmd/                          # cobra CLI: serve, check, version
 ├── internal/
 │   ├── ast/                      # tree-sitter node helpers
@@ -270,7 +270,7 @@ The tree-sitter grammar lives in a sibling repo: [tree-sitter-cisco-ios-jinja2](
 ## Development
 
 ```bash
-make              # build bin/chunter (also regenerates the grammar binding if grammar.js changed)
+make              # build bin/chunt (also regenerates the grammar binding if grammar.js changed)
 make test-lsp     # CGO_ENABLED=1 go test -race ./...
 make test-grammar # tree-sitter corpus test in the sibling grammar repo (needs the checkout)
 make test         # test-lsp only (Go suite); run test-grammar separately for the corpus

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/symbols"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/symbols"
 )
 
 func TestDocumentSymbol_AllKindsPresent(t *testing.T) {

@@ -3,7 +3,7 @@ package keyword_test
 import (
 	"testing"
 
-	"github.com/dgethings/chunter/internal/keyword"
+	"github.com/dgethings/chunt/internal/keyword"
 )
 
 func TestSetLookup(t *testing.T) {
@@ -127,7 +127,7 @@ func TestIsValidInSection(t *testing.T) {
 	}
 }
 
-// TestSetAddValidSections covers chunter-vzy: AddValidSections extends the
+// TestSetAddValidSections covers chunt-vzy: AddValidSections extends the
 // IsValidInSection index for canonical commands the generated DB
 // mis-registers, WITHOUT touching the keyword's canonical Lookup/
 // LookupSection record (so hover, completion, and diagnostic messages are
@@ -214,7 +214,7 @@ func TestLookupSection(t *testing.T) {
 	}
 }
 
-// TestIsValidInSection_Ancestry covers B4 (chunter-mpc): a keyword documented for
+// TestIsValidInSection_Ancestry covers B4 (chunt-mpc): a keyword documented for
 // a section is also valid in that section's DESCENDANTS (a config-if keyword is
 // valid in config-if-atm-range), but the root "config" is NOT inherited into
 // sub-modes (a global-config keyword such as hostname stays invalid inside an
@@ -255,7 +255,7 @@ func TestIsValidInSection_Ancestry(t *testing.T) {
 	}
 }
 
-// TestLookupSection_MatchesLinearScan is the chunter-4qw regression guard for
+// TestLookupSection_MatchesLinearScan is the chunt-4qw regression guard for
 // the O(1) map-based LookupSection: it must return exactly what the original
 // linear scan returned — the first non-empty Section in document order —
 // across duplicates, multi-section entries, trailing-empty entries, and
@@ -289,7 +289,7 @@ func TestLookupSection_MatchesLinearScan(t *testing.T) {
 }
 
 // TestInSection_NoAllocations proves InSection returns a precomputed, shared
-// slice: it allocates 0 times per call (chunter-4qw), so it is safe to call on
+// slice: it allocates 0 times per call (chunt-4qw), so it is safe to call on
 // every completion request.
 func TestInSection_NoAllocations(t *testing.T) {
 	s := keyword.NewSet([]keyword.Keyword{

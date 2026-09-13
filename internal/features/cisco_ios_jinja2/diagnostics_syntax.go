@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/section"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/section"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 // appendSyntaxDiag is the per-node syntax/missing check, folded into the
-// single-pass tree collector (chunter-zob, see collectTreeDiagnostics in
+// single-pass tree collector (chunt-zob, see collectTreeDiagnostics in
 // diagnostics.go). It surfaces the two kinds of recovery nodes the parser can
 // emit:
 //
@@ -38,7 +38,7 @@ func (f *CiscoIOSFeature) appendSyntaxDiag(diags *[]protocol.Diagnostic, n *sitt
 		*diags = append(*diags, protocol.Diagnostic{
 			Range:    nodeRangeOnStartRow(n, content),
 			Severity: protocol.SeverityError,
-			Source:   "chunter",
+			Source:   "chunt",
 			Code:     "syntax-error",
 			Message:  fmt.Sprintf("syntax error near %q", firstLine(content, n)),
 		})
@@ -47,7 +47,7 @@ func (f *CiscoIOSFeature) appendSyntaxDiag(diags *[]protocol.Diagnostic, n *sitt
 		// is then no `output`/`statement`/`comment` node and no MISSING
 		// closer for this pass to report, so the user sees no hint at the
 		// real error line — only the generic ERROR anchored earlier
-		// (chunter-9of). Recover that hint by stack-matching the Jinja
+		// (chunt-9of). Recover that hint by stack-matching the Jinja
 		// openers/closers among the ERROR node's tokens and emitting a
 		// missing-closer diagnostic for each unmatched opener.
 		*diags = append(*diags, unclosedJinjaDiagnostics(n, content)...)
@@ -69,7 +69,7 @@ func missingDiagnostic(n *sitter.Node, content []byte) protocol.Diagnostic {
 					return protocol.Diagnostic{
 						Range:    protocol.LineRange(hdr.StartPosition().Row, hdr.StartPosition().Column, hdr.EndPosition().Column),
 						Severity: protocol.SeverityWarning,
-						Source:   "chunter",
+						Source:   "chunt",
 						Code:     "missing-eos",
 						Message:  fmt.Sprintf("section %q is missing its terminating %q", nodeText(hdr, content), "!"),
 					}
@@ -84,7 +84,7 @@ func missingDiagnostic(n *sitter.Node, content []byte) protocol.Diagnostic {
 	return protocol.Diagnostic{
 		Range:    nodeRangeOnStartRow(n, content),
 		Severity: protocol.SeverityError,
-		Source:   "chunter",
+		Source:   "chunt",
 		Code:     "missing-" + kind,
 		Message:  fmt.Sprintf("missing %q", kind),
 	}
@@ -109,7 +109,7 @@ var jinjaOpeners = map[string]string{
 //
 // This mirrors the diagnostic an unclosed `{{` produces in isolation (a
 // MISSING `}}` inside a clean `output` node) but handles the case where error
-// recovery wraps the opener so no such node exists (chunter-9of).
+// recovery wraps the opener so no such node exists (chunt-9of).
 func unclosedJinjaDiagnostics(n *sitter.Node, content []byte) []protocol.Diagnostic {
 	// Per-closer stacks of currently-open, unmatched opener nodes.
 	open := make(map[string][]*sitter.Node)
@@ -143,7 +143,7 @@ func unclosedJinjaDiagnostics(n *sitter.Node, content []byte) []protocol.Diagnos
 			diags = append(diags, protocol.Diagnostic{
 				Range:    nodeRangeOnStartRow(op, content),
 				Severity: protocol.SeverityError,
-				Source:   "chunter",
+				Source:   "chunt",
 				Code:     "missing-" + closer,
 				Message:  fmt.Sprintf("missing %q", closer),
 			})

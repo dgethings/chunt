@@ -5,8 +5,8 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
-	"github.com/dgethings/chunter/internal/server"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/server"
 	"github.com/spf13/cobra"
 )
 

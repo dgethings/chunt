@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/creachadair/jrpc2"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // jrpcServer safely retrieves the jrpc2 server from ctx. jrpc2.ServerFromContext

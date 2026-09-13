@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	"github.com/dgethings/chunter/internal/ast"
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/keyword"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/ast"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/keyword"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 func (f *CiscoIOSFeature) Hover(ctx context.Context, doc *document.Document, pos protocol.Position) (*protocol.HoverResult, error) {
@@ -53,7 +53,7 @@ func (f *CiscoIOSFeature) Hover(ctx context.Context, doc *document.Document, pos
 // version data), it returns the description verbatim as PlainText so behavior
 // for sparse commands is unchanged. When any extra section is present it
 // returns a sectioned Markdown document, omitting empty sections so a sparse
-// command never shows bare headers (chunter-97u).
+// command never shows bare headers (chunt-97u).
 func buildHoverContent(kw keyword.Keyword) protocol.MarkupContent {
 	if !hasHoverExtras(kw) {
 		return protocol.MarkupContent{
@@ -154,7 +154,7 @@ func hasHoverExtras(kw keyword.Keyword) bool {
 // fenceFor returns a Markdown code fence (a run of backticks) long enough to
 // safely wrap code: it is one backtick longer than the longest backtick run
 // inside code (min 3), so a code block containing ``` cannot terminate the
-// fence early (chunter-97u).
+// fence early (chunt-97u).
 func fenceFor(code string) string {
 	maxRun, run := 0, 0
 	for i := 0; i < len(code); i++ {

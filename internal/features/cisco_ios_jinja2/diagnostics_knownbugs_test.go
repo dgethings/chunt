@@ -8,10 +8,10 @@ import "testing"
 // the moment the bug is fixed, at which point the test starts enforcing the
 // fix. This keeps `make test` green without endorsing the buggy behavior.
 //
-// Reproductions derived from the large manual config used during chunter-cfz
+// Reproductions derived from the large manual config used during chunt-cfz
 // D4 verification (since deleted); these small snippets are the permanent form.
 
-// TestKnownBugVzy_NetworkFlaggedInRouterOspf reproduces chunter-vzy: 'network'
+// TestKnownBugVzy_NetworkFlaggedInRouterOspf reproduces chunt-vzy: 'network'
 // inside a router section is wrongly flagged wrong-section because the keyword
 // DB has no config-router entry for 'network' (LookupSection falls back to the
 // obscure config-ipv6-pmipv6-domain-mn). High impact — every OSPF/BGP config
@@ -21,16 +21,16 @@ func TestKnownBugVzy_NetworkFlaggedInRouterOspf(t *testing.T) {
 	diags := openDiags(t, src)
 
 	if _, bad := findDiagByMessageContains(diags, "network is valid in"); bad {
-		t.Skip("chunter-vzy: 'network' wrongly flagged wrong-section in router ospf " +
+		t.Skip("chunt-vzy: 'network' wrongly flagged wrong-section in router ospf " +
 			"(keyword DB lacks config-router); skip auto-clears when fixed")
 	}
-	// Correct behavior, enforced automatically once chunter-vzy is fixed.
+	// Correct behavior, enforced automatically once chunt-vzy is fixed.
 	if len(diags) != 0 {
 		t.Errorf("'network' in router ospf must not be flagged wrong-section: %+v", diags)
 	}
 }
 
-// TestKnownBug9of_CompoundSyntaxErrorSwallowsMissingJinja reproduces chunter-9of:
+// TestKnownBug9of_CompoundSyntaxErrorSwallowsMissingJinja reproduces chunt-9of:
 // an unterminated section immediately followed by an unclosed jinja '{{' is
 // swallowed into one ERROR node anchored on the section header, so (1) the
 // 'hostname r{{' line gets no clean missing-}} diagnostic, and (2) 'speed'
@@ -43,10 +43,10 @@ func TestKnownBug9of_CompoundSyntaxErrorSwallowsMissingJinja(t *testing.T) {
 	diags := openDiags(t, src)
 
 	if _, hasMissing := findDiagByCode(diags, "missing-}}"); !hasMissing {
-		t.Skip("chunter-9of: unclosed '{{' after an unterminated section is swallowed " +
+		t.Skip("chunt-9of: unclosed '{{' after an unterminated section is swallowed " +
 			"into a generic syntax-error (grammar error-recovery); skip auto-clears when fixed")
 	}
-	// Correct behavior, enforced automatically once chunter-9of is fixed:
+	// Correct behavior, enforced automatically once chunt-9of is fixed:
 	// (1) a clean missing-}} surfaces for the unclosed '{{'.
 	if _, ok := findDiagByCode(diags, "missing-}}"); !ok {
 		t.Errorf("expected missing-}} for 'hostname r{{': %+v", diags)

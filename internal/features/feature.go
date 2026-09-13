@@ -3,8 +3,8 @@ package features
 import (
 	"context"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 type Feature interface {

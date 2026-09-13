@@ -5,10 +5,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/features"
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/server"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/features"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/server"
 )
 
 // stubFeature is a test double implementing features.Feature via inline
@@ -83,8 +83,8 @@ func TestServer_Initialize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
-	if res.ServerInfo.Name != "chunter" {
-		t.Errorf("server name: got %q, want chunter", res.ServerInfo.Name)
+	if res.ServerInfo.Name != "chunt" {
+		t.Errorf("server name: got %q, want chunt", res.ServerInfo.Name)
 	}
 	if res.ServerInfo.Version != "test" {
 		t.Errorf("server version: got %q, want test", res.ServerInfo.Version)

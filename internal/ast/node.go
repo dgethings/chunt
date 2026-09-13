@@ -19,7 +19,7 @@ func FindNodeAtPosition(root *sitter.Node, line, col uint) *sitter.Node {
 	}
 	p := sitter.Point{Row: line, Column: col}
 	node := root.DescendantForPointRange(p, p)
-	// Guard nil BEFORE dereferencing node (B1, chunter-mpc): an out-of-range
+	// Guard nil BEFORE dereferencing node (B1, chunt-mpc): an out-of-range
 	// position can make DescendantForPointRange return nil, and the GrammarName
 	// call below would then panic. (The prior nil check was dead code, sitting
 	// after the deref.)
@@ -79,7 +79,7 @@ func ChildByFieldName(node *sitter.Node, name string) *sitter.Node {
 
 // WalkNamed depth-first traverses the named-children subtree of n, invoking
 // visit on each node. If visit returns false, the subtree under that node is
-// skipped. Shared by the diagnostic passes (chunter-mpc) to avoid each pass
+// skipped. Shared by the diagnostic passes (chunt-mpc) to avoid each pass
 // re-declaring an identical private walker.
 func WalkNamed(n *sitter.Node, visit func(*sitter.Node) bool) {
 	if n == nil {

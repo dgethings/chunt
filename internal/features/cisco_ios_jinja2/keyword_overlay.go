@@ -11,8 +11,8 @@ package cisco_ios_jinja2
 // per-command reference pages. A command documented only under a rare sub-mode
 // (e.g. `network` is documented for IPv6 PMIPv6) but canonically used inside
 // router processes (OSPF/BGP) resolves to that obscure section and is flagged
-// as wrong-section in config-router. This overlay is the chunter-side fix; the
-// generator itself lives in a sibling repo. See chunter-vzy.
+// as wrong-section in config-router. This overlay is the chunt-side fix; the
+// generator itself lives in a sibling repo. See chunt-vzy.
 //
 // Entries are conservative: only single-token commands that are unambiguously
 // canonical router sub-commands. Commands absent from the DB entirely (e.g.

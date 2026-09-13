@@ -6,13 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dgethings/chunter/internal/logger"
+	"github.com/dgethings/chunt/internal/logger"
 )
 
 var logLevel string
 
 var rootCmd = &cobra.Command{
-	Use:   "chunter",
+	Use:   "chunt",
 	Short: "Language server for network operating systems",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var lvl slog.Level

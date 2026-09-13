@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
 )
 
 // configWithDiags mirrors example.ios.j2: one undefined ACL and one duplicate
@@ -26,8 +26,8 @@ func resetRoot(t *testing.T) {
 }
 
 // TestCheckOutputFormat locks the stable, machine-parseable
-// "file:line:col: message" format produced by `chunter check` (chunter-lto):
-// no redundant [chunter] prefix and no structured grammar log line on stdout.
+// "file:line:col: message" format produced by `chunt check` (chunt-lto):
+// no redundant [chunt] prefix and no structured grammar log line on stdout.
 func TestCheckOutputFormat(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "example.ios.j2")
@@ -46,9 +46,9 @@ func TestCheckOutputFormat(t *testing.T) {
 
 	out := stdout.String()
 
-	// Fix 2: the LSP Diagnostic.Source must not appear as a [chunter] prefix.
-	if strings.Contains(out, "[chunter]") {
-		t.Errorf("stdout contains [chunter] prefix:\n%s", out)
+	// Fix 2: the LSP Diagnostic.Source must not appear as a [chunt] prefix.
+	if strings.Contains(out, "[chunt]") {
+		t.Errorf("stdout contains [chunt] prefix:\n%s", out)
 	}
 
 	// Fix 1: stdout must carry diagnostics only — no leaked log line.
@@ -134,7 +134,7 @@ func TestNewGrammarLogSuppressedAtInfo(t *testing.T) {
 }
 
 // TestNewGrammarLogEmittedAtDebug confirms the log was downgraded, not deleted:
-// it surfaces at Debug level, so `chunter check --log-level debug` still shows it.
+// it surfaces at Debug level, so `chunt check --log-level debug` still shows it.
 func TestNewGrammarLogEmittedAtDebug(t *testing.T) {
 	buf, restore := withSlogLevel(t, slog.LevelDebug)
 	defer restore()

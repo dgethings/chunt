@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // openOpen parses src via the feature's DidOpen and returns the produced
@@ -102,8 +102,8 @@ func TestUndefinedReferenceDiagnostics_FlagsEachKind(t *testing.T) {
 			if d.Severity != protocol.SeverityWarning {
 				t.Errorf("severity: got %d, want %d (Warning)", d.Severity, protocol.SeverityWarning)
 			}
-			if d.Source != "chunter" {
-				t.Errorf("source: got %q, want \"chunter\"", d.Source)
+			if d.Source != "chunt" {
+				t.Errorf("source: got %q, want \"chunt\"", d.Source)
 			}
 			if d.Message != tc.wantSub {
 				t.Errorf("message: got %q, want %q", d.Message, tc.wantSub)
@@ -312,7 +312,7 @@ func TestVersionMismatchStillWorks(t *testing.T) {
 	}
 }
 
-// TestMergedCollector_AllFamiliesInOnePass is the chunter-zob regression guard.
+// TestMergedCollector_AllFamiliesInOnePass is the chunt-zob regression guard.
 // A single document triggers three diagnostic families at once — syntax
 // (missing-}}), wrong-section (an interface command in a router section), and
 // protocol-mismatch (an OSPF "area" in a BGP router) — and all three must

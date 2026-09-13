@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -57,7 +57,7 @@ type docIndex struct {
 	References []Reference
 	// O(1) lookup indices, built in Table.Index after extraction. They point
 	// into Symbols/References and preserve document order, so the Lookup-
-	// family methods return identical results to a linear scan (chunter-4qw).
+	// family methods return identical results to a linear scan (chunt-4qw).
 	byKindName    map[Kind]map[string][]*Symbol    // Lookup(kind, name)
 	byName        map[string][]*Symbol             // LookupAny(name)
 	byKindNameRef map[Kind]map[string][]*Reference // ReferencesLookup(kind, name)
@@ -93,7 +93,7 @@ func (t *Table) Index(uri string, root *sitter.Node, content []byte) {
 // document order. Pointers into the backing slices keep the maps consistent;
 // the slices are never mutated after Index, so the pointers stay valid for
 // the life of the docIndex. Called from Index (under the write lock).
-// chunter-4qw.
+// chunt-4qw.
 func (di *docIndex) buildIndices() {
 	di.byKindName = make(map[Kind]map[string][]*Symbol)
 	di.byName = make(map[string][]*Symbol, len(di.Symbols))
@@ -138,7 +138,7 @@ func (t *Table) All(uri string) []Symbol {
 }
 
 // Lookup returns symbols matching kind+name in uri, in document order. O(1)
-// average via the byKindName index (chunter-4qw).
+// average via the byKindName index (chunt-4qw).
 func (t *Table) Lookup(uri string, kind Kind, name string) []Symbol {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -154,7 +154,7 @@ func (t *Table) Lookup(uri string, kind Kind, name string) []Symbol {
 }
 
 // LookupAny returns symbols in uri with a matching name regardless of kind,
-// in document order. O(1) average via the byName index (chunter-4qw).
+// in document order. O(1) average via the byName index (chunt-4qw).
 func (t *Table) LookupAny(uri string, name string) []Symbol {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -179,7 +179,7 @@ func (t *Table) ReferencesAll(uri string) []Reference {
 // ReferencesLookup returns references in uri whose Kind and Name match, in
 // document order. Used by the References LSP feature ("find all usages of
 // this symbol") and by the unused-definition diagnostic ("any reference to
-// this definition?"). O(1) average via the byKindNameRef index (chunter-4qw).
+// this definition?"). O(1) average via the byKindNameRef index (chunt-4qw).
 func (t *Table) ReferencesLookup(uri string, kind Kind, name string) []Reference {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -196,7 +196,7 @@ func (t *Table) ReferencesLookup(uri string, kind Kind, name string) []Reference
 
 // copySymbols dereferences a slice of symbol pointers into a fresh value
 // slice, returning nil for empty input so callers observe the same nil-vs-
-// empty semantics as the original linear-scan implementation. chunter-4qw.
+// empty semantics as the original linear-scan implementation. chunt-4qw.
 func copySymbols(src []*Symbol) []Symbol {
 	if len(src) == 0 {
 		return nil
@@ -208,7 +208,7 @@ func copySymbols(src []*Symbol) []Symbol {
 	return out
 }
 
-// copyReferences is the Reference analogue of copySymbols. chunter-4qw.
+// copyReferences is the Reference analogue of copySymbols. chunt-4qw.
 func copyReferences(src []*Reference) []Reference {
 	if len(src) == 0 {
 		return nil
@@ -330,7 +330,7 @@ func extractFlat(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 //
 // NOTE: this table drives Symbol EXTRACTION (LSP-facing Kind + name field) —
 // a different concern from the AST-kind -> keyword.Section mapping, whose
-// single source of truth is internal/section (chunter-mpc). Keep the two
+// single source of truth is internal/section (chunt-mpc). Keep the two
 // tables in step when adding a section kind.
 type sectionSpec struct {
 	sectionKind string // AST node kind, e.g. "interface_section"

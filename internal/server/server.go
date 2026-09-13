@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/features"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/features"
 )
 
 type serverState int

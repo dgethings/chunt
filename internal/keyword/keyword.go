@@ -1,6 +1,6 @@
 package keyword
 
-import "github.com/dgethings/chunter/internal/protocol"
+import "github.com/dgethings/chunt/internal/protocol"
 
 type Keyword struct {
 	Keyword string
@@ -58,11 +58,11 @@ type Set struct {
 	// "") folded together with that section's keywords, so InSection is O(1)
 	// and allocation-free. The cached slices are shared and MUST NOT be
 	// mutated by callers (documented on InSection). Built once in NewSet
-	// (chunter-4qw).
+	// (chunt-4qw).
 	inSectionCache map[string][]Keyword
 	// byNameFirstSection maps a keyword name to the first non-empty Section
 	// encountered for it (document order), so LookupSection is an O(1) map
-	// read instead of a linear scan over all entries (chunter-4qw).
+	// read instead of a linear scan over all entries (chunt-4qw).
 	byNameFirstSection map[string]string
 }
 
@@ -81,7 +81,7 @@ func NewSet(kws []Keyword) *Set {
 		s.byName[kw.Keyword] = kw
 		s.bySection[kw.Section] = append(s.bySection[kw.Section], kw)
 		// Record the first non-empty section per name in document order —
-		// exactly what LookupSection returns (chunter-4qw).
+		// exactly what LookupSection returns (chunt-4qw).
 		if kw.Section != "" {
 			if _, ok := s.byNameFirstSection[kw.Keyword]; !ok {
 				s.byNameFirstSection[kw.Keyword] = kw.Section
@@ -111,7 +111,7 @@ func NewSet(kws []Keyword) *Set {
 
 	// Precompute the per-section InSection slices once (globals folded into
 	// every section) so InSection returns a shared, allocation-free slice
-	// (chunter-4qw).
+	// (chunt-4qw).
 	globals := s.bySection[""]
 	s.inSectionCache = make(map[string][]Keyword, len(s.bySection))
 	for sec, secKws := range s.bySection {
@@ -144,7 +144,7 @@ func (s *Set) Lookup(name string) (Keyword, bool) {
 // does not know at all (no keyword in the DB references it), callers should
 // first collapse it to its nearest known ancestor (see SectionTree.NearestKnown)
 // — IsValidInSection alone cannot relate an unknown section to its parents
-// (B4/B5, chunter-mpc).
+// (B4/B5, chunt-mpc).
 func (s *Set) IsValidInSection(name, section string) bool {
 	sections, ok := s.byNameSection[name]
 	if !ok {
@@ -159,7 +159,7 @@ func (s *Set) IsValidInSection(name, section string) bool {
 		// mode) keyword such as `hostname` is valid only at the top level, not
 		// inside sub-modes, so both the empty-string and "config" sections are
 		// excluded from the ancestry grant. Without this exclusion, `hostname`
-		// inside `router bgp` would stop being flagged (chunter-mpc).
+		// inside `router bgp` would stop being flagged (chunt-mpc).
 		if validSec != "" && validSec != "config" && s.tree.IsAncestor(validSec, section) {
 			return true
 		}
@@ -170,7 +170,7 @@ func (s *Set) IsValidInSection(name, section string) bool {
 // LookupSection returns the first non-empty Section for the given keyword
 // name, or "" if the keyword is unknown or only global. Used to build
 // diagnostic messages that point the user at where the keyword does belong.
-// O(1) map read over byNameFirstSection (chunter-4qw).
+// O(1) map read over byNameFirstSection (chunt-4qw).
 func (s *Set) LookupSection(name string) string {
 	return s.byNameFirstSection[name]
 }
@@ -183,10 +183,10 @@ func (s *Set) LookupSection(name string) string {
 // registers under an obscure (or no) section, without altering their canonical
 // hover/completion record or diagnostic message.
 //
-// This is the chunter-side seam for the generated keyword DB's gaps (e.g.
+// This is the chunt-side seam for the generated keyword DB's gaps (e.g.
 // `network` and `router-id` are canonical router-process commands the DB only
 // registers under IPv6-PMIPv6 / L2VPN sections); the deeper fix lives in the
-// external keyword generator. See chunter-vzy.
+// external keyword generator. See chunt-vzy.
 func (s *Set) AddValidSections(name string, sections ...string) {
 	if _, ok := s.byNameSection[name]; !ok {
 		s.byNameSection[name] = make(map[string]bool)
@@ -200,7 +200,7 @@ func (s *Set) AddValidSections(name string, sections ...string) {
 // (Section "") plus the keywords whose Section is exactly section. The
 // returned slice is SHARED across calls and MUST NOT be mutated by the
 // caller — it is precomputed once in NewSet for O(1), allocation-free access
-// (chunter-4qw). For a section with no dedicated keywords, only the globals
+// (chunt-4qw). For a section with no dedicated keywords, only the globals
 // are returned (matching the previous append(globals, nil) behavior).
 func (s *Set) InSection(section string) []Keyword {
 	if cached, ok := s.inSectionCache[section]; ok {

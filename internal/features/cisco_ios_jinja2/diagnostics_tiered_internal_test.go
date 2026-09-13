@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
-// Tests for the progressive-publishing contract (chunter-cfz): DidOpen/DidChange
+// Tests for the progressive-publishing contract (chunt-cfz): DidOpen/DidChange
 // with a non-nil publish callback emit diagnostics in tiers — tree-only passes
 // first (before symbols.Index), then the full set (after). See
-// DESIGN-chunter-cfz-progressive-diagnostics.md.
+// DESIGN-chunt-cfz-progressive-diagnostics.md.
 
 func diagKey(d protocol.Diagnostic) string {
 	return fmt.Sprintf("%s|%d:%d|%s", d.Code, d.Range.Start.Line, d.Range.Start.Character, d.Message)
@@ -172,7 +172,7 @@ func TestTieredPublishing_Clean(t *testing.T) {
 // didChange path. The edit re-sends the SAME content (a no-op, e.g. a redundant
 // notify): the stored old tree is valid for identical content, so the
 // incremental parse is deterministic and equals a cold parse. A real content
-// change would trip chunter's pre-existing stale-incremental-parse limitation
+// change would trip chunt's pre-existing stale-incremental-parse limitation
 // (DidChange passes oldTree without a tree.Edit because the LSP DTO carries no
 // Range) — orthogonal to the tiered-publishing contract under test here.
 func TestTieredPublishing_DidChange(t *testing.T) {

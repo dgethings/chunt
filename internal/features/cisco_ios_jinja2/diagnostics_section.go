@@ -3,14 +3,14 @@ package cisco_ios_jinja2
 import (
 	"strings"
 
-	"github.com/dgethings/chunter/internal/keyword"
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/section"
+	"github.com/dgethings/chunt/internal/keyword"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/section"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 // appendWrongSection is the per-node wrong-section check, folded into the
-// single-pass tree collector (chunter-zob, see collectTreeDiagnostics in
+// single-pass tree collector (chunt-zob, see collectTreeDiagnostics in
 // diagnostics.go). It emits a Hint for each command whose leading keyword is
 // known to the database but not valid in the enclosing config section. This
 // catches common copy-paste errors (e.g. an interface command inside a router
@@ -26,7 +26,7 @@ import (
 // hint when an ERROR is an ancestor, so descending there is a harmless no-op.
 func (f *CiscoIOSFeature) appendWrongSection(diags *[]protocol.Diagnostic, n *sitter.Node, content []byte) {
 	enclosingSection, _ := section.EnclosingSection(n, content)
-	// B5 (chunter-mpc): when the grammar detects a section the keyword DB has
+	// B5 (chunt-mpc): when the grammar detects a section the keyword DB has
 	// no keywords for (or a sub-mode more precise than the DB models),
 	// collapse it to the nearest known ancestor before validating — mirroring
 	// completion.go. Without this, a keyword documented for a parent section
@@ -57,7 +57,7 @@ func (f *CiscoIOSFeature) appendWrongSection(diags *[]protocol.Diagnostic, n *si
 	// section greedily swallows following top-level commands into itself).
 	// In both cases the wrong-section flag would be misleading noise, and
 	// the underlying problem is already surfaced by the syntax pass
-	// (chunter-9of).
+	// (chunt-9of).
 	if unreliableSectionContext(n) {
 		return
 	}
@@ -70,7 +70,7 @@ func (f *CiscoIOSFeature) appendWrongSection(diags *[]protocol.Diagnostic, n *si
 			n.EndPosition().Column,
 		),
 		Severity: protocol.SeverityHint,
-		Source:   "chunter",
+		Source:   "chunt",
 		Message:  kw + " is valid in " + validSection + ", not in " + enclosingSection,
 	})
 }
@@ -120,7 +120,7 @@ func firstKeywordFromNode(n *sitter.Node, content []byte, kw *keyword.Set) strin
 
 // walkNamed was previously defined here as a private duplicate of
 // ast.WalkNamed; the diagnostic passes now share the single helper in
-// internal/ast (chunter-mpc).
+// internal/ast (chunt-mpc).
 
 // unreliableSectionContext reports whether n's enclosing-section context is
 // too corrupted by parse recovery to trust a wrong-section hint. It returns
@@ -129,7 +129,7 @@ func firstKeywordFromNode(n *sitter.Node, content []byte, kw *keyword.Set) strin
 // terminating `eos` (an unterminated section greedily swallows following
 // top-level commands into itself). In both cases a wrong-section flag would be
 // misleading noise, and the syntax pass already surfaces the underlying
-// problem (chunter-9of).
+// problem (chunt-9of).
 func unreliableSectionContext(n *sitter.Node) bool {
 	var innermostSection *sitter.Node
 	for p := n.Parent(); p != nil; p = p.Parent() {

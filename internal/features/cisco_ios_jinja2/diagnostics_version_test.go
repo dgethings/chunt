@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // TestVersionMismatchDiagnostics covers the version-mismatch pass: matching
@@ -52,8 +52,8 @@ func TestVersionMismatchDiagnostics(t *testing.T) {
 				if d.Severity != 1 { // SeverityError
 					t.Errorf("severity: got %d, want Error (1)", d.Severity)
 				}
-				if d.Source != "chunter" {
-					t.Errorf("source: got %q, want \"chunter\"", d.Source)
+				if d.Source != "chunt" {
+					t.Errorf("source: got %q, want \"chunt\"", d.Source)
 				}
 				if d.Message == "" {
 					t.Errorf("message is empty")
@@ -75,7 +75,7 @@ func TestVersionMismatchDiagnostics_FirstCommentWins(t *testing.T) {
 }
 
 // TestCommandVersionDiagnostics covers the per-command introduced-after-running
-// pass (chunter-y9d). hostname's MinVersion is 12.2, so under a 12.1 running
+// pass (chunt-y9d). hostname's MinVersion is 12.2, so under a 12.1 running
 // image it is flagged; under a newer image (or with no running version, or for
 // a command with no MinVersion) nothing fires. Each case asserts exactly the
 // expected presence/absence of a version-introduced diagnostic.
@@ -120,8 +120,8 @@ func TestCommandVersionDiagnostics(t *testing.T) {
 				if d.Severity != protocol.SeverityHint {
 					t.Errorf("severity: got %d, want Hint (4)", d.Severity)
 				}
-				if d.Source != "chunter" {
-					t.Errorf("source: got %q, want \"chunter\"", d.Source)
+				if d.Source != "chunt" {
+					t.Errorf("source: got %q, want \"chunt\"", d.Source)
 				}
 				for _, want := range []string{"hostname", "12.2", "12.1"} {
 					if !strings.Contains(d.Message, want) {

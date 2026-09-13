@@ -3,7 +3,7 @@ package ast_test
 import (
 	"testing"
 
-	"github.com/dgethings/chunter/internal/ast"
+	"github.com/dgethings/chunt/internal/ast"
 	ts_ci "github.com/dgethings/tree-sitter-cisco-ios-jinja2/bindings/go"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -124,7 +124,7 @@ func TestFindNodeAtPosition(t *testing.T) {
 	}
 }
 
-// TestFindNodeAtPosition_OutOfRangeNoPanic guards B1 (chunter-mpc): an
+// TestFindNodeAtPosition_OutOfRangeNoPanic guards B1 (chunt-mpc): an
 // out-of-range position must not panic. The original code dereferenced the
 // node (GrammarName) before the nil check, so a nil return from
 // DescendantForPointRange would have panicked. (This binding returns a node

@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // DocumentSymbol dispatches textDocument/documentSymbol to the registered

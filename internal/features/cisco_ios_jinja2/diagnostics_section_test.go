@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // findHintByKeyword returns the first Hint diagnostic whose message contains
@@ -44,8 +44,8 @@ func TestWrongSectionDiagnostics_InterfaceCmdInRouter(t *testing.T) {
 	if !strings.Contains(d.Message, "config-if") {
 		t.Errorf("expected message to mention config-if (where speed is valid); got %q", d.Message)
 	}
-	if d.Source != "chunter" {
-		t.Errorf("source: got %q, want \"chunter\"", d.Source)
+	if d.Source != "chunt" {
+		t.Errorf("source: got %q, want \"chunt\"", d.Source)
 	}
 }
 
@@ -147,7 +147,7 @@ func TestWrongSectionDiagnostics_NoFalsePositives(t *testing.T) {
 }
 
 // TestWrongSectionDiagnostics_ParentKeywordInChildSection guards B4/B5
-// (chunter-mpc): a keyword documented for a PARENT section must NOT be flagged
+// (chunt-mpc): a keyword documented for a PARENT section must NOT be flagged
 // when used in a CHILD section. `nsf cisco` is valid only in config-router; used
 // inside an address-family (config-router-af, a child of config-router) it must
 // not raise a wrong-section Hint. Before B4, IsValidInSection did an exact
@@ -158,7 +158,7 @@ func TestWrongSectionDiagnostics_ParentKeywordInChildSection(t *testing.T) {
 	assertNoDiagAbout(t, diags, "nsf")
 }
 
-// TestWrongSectionDiagnostics_RouterCanonicalCommands guards chunter-vzy: the
+// TestWrongSectionDiagnostics_RouterCanonicalCommands guards chunt-vzy: the
 // generated keyword DB registers canonical router-process sub-commands
 // (`network`, `router-id`) only under obscure sections (IPv6-PMIPv6 / L2VPN),
 // so they were flagged as wrong-section inside every `router` section. The
@@ -206,7 +206,7 @@ func TestWrongSectionDiagnostics_OverlayIsSurgical(t *testing.T) {
 	}
 }
 
-// TestWrongSectionDiagnostics_SuppressedInCorruptedContext guards chunter-9of
+// TestWrongSectionDiagnostics_SuppressedInCorruptedContext guards chunt-9of
 // symptom 2: when a parse error corrupts section boundaries, wrong-section
 // hints are misleading noise and are suppressed. Two cases: (a) an
 // unterminated section greedily swallows a following top-level command, and

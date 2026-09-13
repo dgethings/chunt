@@ -1,6 +1,6 @@
 package cisco_ios_jinja2_test
 
-// Golden-file integration harness (chunter-0uz).
+// Golden-file integration harness (chunt-0uz).
 //
 // This file adds an integration test tier ON TOP of the inline unit tests in
 // the other *_test.go files. It feeds representative, realistic show-run-style
@@ -19,7 +19,7 @@ package cisco_ios_jinja2_test
 //	<name>.golden   the expected pipeline output (generated; do not hand-edit)
 //
 // Each fixture targets one diagnostic pass to keep failures localized (see the
-// chunter-0uz design notes). See testdata/golden/README.md for how to add one.
+// chunt-0uz design notes). See testdata/golden/README.md for how to add one.
 
 import (
 	"bytes"
@@ -34,9 +34,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // updateGoldens, when set via `go test -update`, rewrites every .golden file
@@ -251,7 +251,7 @@ func formatCompletion(items []protocol.CompletionItem) string {
 //
 // The value is bounded to the first hoverPreviewBytes: a sparse command's
 // PlainText description is short and shown verbatim, but a rich Markdown
-// hover (chunter-97u) can be several thousand bytes (interface's Usage
+// hover (chunt-97u) can be several thousand bytes (interface's Usage
 // Guidelines alone is ~35KB). Truncating keeps the golden diffable and focused
 // on the leading structure (kind + description + first section header) while
 // the full per-section rendering is covered by the inline buildHoverContent

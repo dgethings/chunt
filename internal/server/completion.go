@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 func (s *Server) Completion(ctx context.Context, params protocol.CompletionParams) (protocol.CompletionList, error) {

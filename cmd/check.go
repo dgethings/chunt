@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
 	"github.com/spf13/cobra"
 )
 
@@ -36,9 +36,9 @@ var checkCmd = &cobra.Command{
 		}
 
 		// Stable, machine-parseable "file:line:col: message" format. The LSP
-		// Diagnostic.Source ("chunter") is meaningful over the protocol but is
-		// redundant noise here — the user already knows they invoked chunter.
-		// (chunter-lto)
+		// Diagnostic.Source ("chunt") is meaningful over the protocol but is
+		// redundant noise here — the user already knows they invoked chunt.
+		// (chunt-lto)
 		for _, d := range diagnostics {
 			fmt.Fprintf(out, "%s:%d:%d: %s\n",
 				path,

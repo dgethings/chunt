@@ -16,7 +16,7 @@ type DocumentSymbolParams struct {
 // when the user picks this entry (typically just the name token).
 //
 // The Children field supports nesting (e.g. a policy-map with one child per
-// `class` block); for v1 chunter returns a flat list and leaves Children
+// `class` block); for v1 chunt returns a flat list and leaves Children
 // empty.
 type DocumentSymbol struct {
 	Name           string               `json:"name"`
@@ -28,7 +28,7 @@ type DocumentSymbol struct {
 	Children       []DocumentSymbol     `json:"children,omitempty"`
 }
 
-// LSP SymbolKind enum values. Only the kinds chunter uses are listed; the
+// LSP SymbolKind enum values. Only the kinds chunt uses are listed; the
 // full enum is at
 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#symbolKind
 const (

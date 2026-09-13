@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
 	"github.com/spf13/cobra"
 )
 

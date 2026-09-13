@@ -3,9 +3,9 @@ package cisco_ios_jinja2
 import (
 	"context"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/symbols"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/symbols"
 )
 
 // References implements textDocument/references. The cursor is resolved to

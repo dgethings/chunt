@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 func (s *Server) DidOpen(ctx context.Context, params protocol.DidOpenTextDocumentParams) error {

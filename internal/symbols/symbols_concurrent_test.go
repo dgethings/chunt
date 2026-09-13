@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/symbols"
+	"github.com/dgethings/chunt/internal/symbols"
 	ts_ci "github.com/dgethings/tree-sitter-cisco-ios-jinja2/bindings/go"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )

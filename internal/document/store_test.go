@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
+	"github.com/dgethings/chunt/internal/document"
 )
 
 // TestStore_Concurrent verifies the Store is safe under concurrent

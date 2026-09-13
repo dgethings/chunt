@@ -1,7 +1,7 @@
 // Package section resolves the enclosing Cisco IOS configuration-mode section
 // (and, for routing contexts, the routing protocol) for a tree-sitter AST node.
 // It is the single source of truth for the AST section-kind → keyword.Section
-// ID mapping, shared by completion and the diagnostic passes (chunter-mpc).
+// ID mapping, shared by completion and the diagnostic passes (chunt-mpc).
 //
 // Before this package existed, the same mapping table was duplicated in
 // completion.go (sectionForNodeMap) and consulted inline in diagnostics_section
@@ -147,7 +147,7 @@ func readRouterProtocol(routerSection *sitter.Node, content []byte) string {
 // resolveACLSection reads the ip_access_list_header's "type" field to determine
 // whether this is a standard or extended ACL section. Moved here from
 // completion.go so both completion and the diagnostic passes share one
-// implementation (chunter-mpc). Defaults to config-ext-nacl when the type field
+// implementation (chunt-mpc). Defaults to config-ext-nacl when the type field
 // is absent or unrecognized.
 func resolveACLSection(sectionNode *sitter.Node, content []byte) string {
 	header := namedChildByKind(sectionNode, "ip_access_list_header")

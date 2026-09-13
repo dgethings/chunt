@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"runtime/debug"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/keyword"
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/symbols"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/keyword"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/symbols"
 	ts "github.com/dgethings/tree-sitter-cisco-ios-jinja2/bindings/go"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -29,14 +29,14 @@ func New() *CiscoIOSFeature {
 	p.SetLanguage(sitter.NewLanguage(ts.Language()))
 	// Debug, not Info: the resolved grammar module/version is troubleshooting
 	// detail, not per-run operational signal. At the default --log-level=info
-	// this would otherwise leak into CLI output (e.g. `chunter check`). Surface
-	// it with `chunter check --log-level debug`. (chunter-lto)
+	// this would otherwise leak into CLI output (e.g. `chunt check`). Surface
+	// it with `chunt check --log-level debug`. (chunt-lto)
 	slog.Debug("grammar", "module", GrammarModule, "version", GrammarVersion())
 	keywords := keyword.NewSet(Keywords)
 	// Fold the curated router-command overlay into the section-validity index
 	// so canonical commands the generated DB mis-registers (network,
 	// router-id) are not flagged as wrong-section inside router sections
-	// (chunter-vzy). Hover/completion are unaffected.
+	// (chunt-vzy). Hover/completion are unaffected.
 	for name, sections := range routerKeywordOverlay {
 		keywords.AddValidSections(name, sections...)
 	}
@@ -86,7 +86,7 @@ func (f *CiscoIOSFeature) Close() error {
 
 // DidOpen parses the document and returns its diagnostics. When publish is
 // non-nil the diagnostics are streamed in two tiers (progressive publishing,
-// chunter-cfz): tier 1 publishes the tree-only passes (syntax/version/section/
+// chunt-cfz): tier 1 publishes the tree-only passes (syntax/version/section/
 // protocol) immediately after parse, BEFORE the expensive symbols.Index; tier 2
 // publishes the full set (adds undefined-refs + duplicate-defs) after Index. A
 // nil publish skips mid-pipeline publishing and just returns the full set (used

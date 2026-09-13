@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/features/cisco_ios_jinja2"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/features/cisco_ios_jinja2"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 func TestHoverHostname(t *testing.T) {
@@ -37,7 +37,7 @@ func TestHoverHostname(t *testing.T) {
 
 	// hostname now carries Usage/Examples/Defaults/Command-History data, so the
 	// hover is a structured Markdown document whose leading text is still the
-	// description (chunter-97u). Assert the description is present and that the
+	// description (chunt-97u). Assert the description is present and that the
 	// rich data promoted it to Markdown.
 	desc := "To specify or modify the hostname for the network server, use the hostname command in global configuration mode."
 	if !strings.Contains(result.Contents.Value, desc) {
@@ -140,7 +140,7 @@ func TestHoverInterface(t *testing.T) {
 
 // TestHoverRichMarkdownHostname verifies the rich hover for a command that
 // carries the full scraped dataset: the Markdown must include every section
-// label and the description as the leading text (chunter-97u).
+// label and the description as the leading text (chunt-97u).
 func TestHoverRichMarkdownHostname(t *testing.T) {
 	f := cisco_ios_jinja2.New()
 	defer f.Close()

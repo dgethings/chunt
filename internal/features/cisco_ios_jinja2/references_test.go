@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 func TestReferences_FromReference(t *testing.T) {

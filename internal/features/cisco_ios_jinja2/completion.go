@@ -6,18 +6,18 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dgethings/chunter/internal/ast"
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/keyword"
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/section"
+	"github.com/dgethings/chunt/internal/ast"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/keyword"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/section"
 )
 
 // headerKeywordPats are regex fragments matching the keyword prefix of each
 // section header. They power argumentPositionRe (the cursor-past-keyword
 // detector below) and are a completion-specific concern: the canonical
 // AST-kind -> keyword.Section mapping now lives in internal/section
-// (chunter-mpc), so this list is NOT a second source of truth for section
+// (chunt-mpc), so this list is NOT a second source of truth for section
 // identity — only for the keyword-text shapes the argument-position regex must
 // recognize.
 var headerKeywordPats = []string{
@@ -178,7 +178,7 @@ func createItems(kws keyword.Keywords) []protocol.CompletionItem {
 			// Mode-opening commands carry EnterMode (the sub-mode they open, e.g.
 			// interface -> config-if). Surface it as the completion Detail so the
 			// candidate indicates where it lands. Negated forms ("no <kw>") do
-			// not enter the mode, so they are excluded (chunter-fj1).
+			// not enter the mode, so they are excluded (chunt-fj1).
 			var detail string
 			if kw.EnterMode != "" && !strings.HasPrefix(s, "no ") {
 				detail = "Enters " + kw.EnterMode + " mode"

@@ -1,7 +1,7 @@
 .PHONY: all lsp clean grammar-clean release snapshot release-dry-run generate grammar grammar-bump grammar-root test test-lsp test-grammar cover cover-html workspace
 
 TS ?= tree-sitter
-# Sibling grammar repo (tree-sitter-cisco-ios-jinja2). OPTIONAL: chunter depends
+# Sibling grammar repo (tree-sitter-cisco-ios-jinja2). OPTIONAL: chunt depends
 # on the grammar as a published Go module (see the go.mod require line), so a
 # normal build/test fetches it from the module proxy and needs NO local
 # checkout. The sibling is only required by the opt-in contributor targets
@@ -21,7 +21,7 @@ TS_PARSER := $(TS_DIR)/src/parser.c
 # Go file whose contents derive from parser.c's hash into the binding package
 # makes the cache key change whenever the grammar changes.
 TS_HASH_GO := $(TS_DIR)/bindings/go/parser_hash.go
-BIN := bin/chunter
+BIN := bin/chunt
 WORKSPACE := go.work
 
 SRCS := $(wildcard main.go cmd/*.go) $(shell find internal -name '*.go')
@@ -98,7 +98,7 @@ grammar-bump:
 	target=$(if $(GRAMMAR_VERSION),$(GRAMMAR_VERSION),latest); \
 	GOWORK=off CGO_ENABLED=1 go get $(GRAMMAR_MODULE)@$$target && GOWORK=off go mod tidy; \
 	after=$$(GOWORK=off go list -m -f '{{.Version}}' $(GRAMMAR_MODULE)); \
-	echo "[chunter] grammar $(GRAMMAR_MODULE): $$before -> $$after"
+	echo "[chunt] grammar $(GRAMMAR_MODULE): $$before -> $$after"
 
 # ---------------------------------------------------------------------------
 # Contributor-only targets — need a local sibling grammar checkout
@@ -108,8 +108,8 @@ grammar-bump:
 # (as a normal prerequisite) so the opt-in targets below never get past it.
 grammar-root:
 	@if [ ! -f "$(TS_DIR)/go.mod" ]; then \
-		echo "[chunter] sibling grammar not found at $(TS_DIR)" >&2; \
-		echo "[chunter] clone it: git clone https://github.com/dgethings/tree-sitter-cisco-ios-jinja2 ../tree-sitter-cisco-ios-jinja2" >&2; \
+		echo "[chunt] sibling grammar not found at $(TS_DIR)" >&2; \
+		echo "[chunt] clone it: git clone https://github.com/dgethings/tree-sitter-cisco-ios-jinja2 ../tree-sitter-cisco-ios-jinja2" >&2; \
 		exit 1; \
 	fi
 
@@ -130,7 +130,7 @@ generate: grammar
 test-grammar: grammar
 	cd $(TS_DIR) && $(TS) test
 
-# Opt-in local-dev override: write a gitignored go.work pointing chunter at the
+# Opt-in local-dev override: write a gitignored go.work pointing chunt at the
 # sibling grammar instead of the published module, so local grammar edits are
 # picked up immediately. Remove go.work (or run `make clean-workspace`) to
 # revert to the published module.
@@ -138,7 +138,7 @@ workspace: grammar-root
 	@tmp=$$(mktemp); \
 	printf 'go 1.26.3\n\nuse .\n\nreplace %s => %s\n' "$(GRAMMAR_MODULE)" "$(TS_DIR)" > $$tmp; \
 	if ! cmp -s $$tmp $(WORKSPACE) 2>/dev/null; then \
-		mv $$tmp $(WORKSPACE); echo "[chunter] wrote $(WORKSPACE) (grammar -> $(TS_DIR))"; \
+		mv $$tmp $(WORKSPACE); echo "[chunt] wrote $(WORKSPACE) (grammar -> $(TS_DIR))"; \
 	else rm -f $$tmp; fi
 
 # ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ clean: clean-workspace
 	go clean -cache
 	rm -f $(BIN)
 
-# Remove a locally-generated go.work so chunter reverts to the published module.
+# Remove a locally-generated go.work so chunt reverts to the published module.
 clean-workspace:
 	rm -f $(WORKSPACE) $(WORKSPACE).sum
 

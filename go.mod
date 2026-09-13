@@ -1,4 +1,4 @@
-module github.com/dgethings/chunter
+module github.com/dgethings/chunt
 
 go 1.26.3
 

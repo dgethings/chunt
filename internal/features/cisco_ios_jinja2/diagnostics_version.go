@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -55,7 +55,7 @@ func (f *CiscoIOSFeature) runVersionMismatchDiagnostics(doc *document.Document, 
 		diags = append(diags, protocol.Diagnostic{
 			Range:    protocol.LineRange(cfgVerNode.StartPosition().Row, cfgVerNode.StartPosition().Column, cfgVerNode.EndPosition().Column),
 			Severity: protocol.SeverityError,
-			Source:   "chunter",
+			Source:   "chunt",
 			Code:     "version-mismatch",
 			Message:  "running version and configured version mismatch",
 		})
@@ -65,7 +65,7 @@ func (f *CiscoIOSFeature) runVersionMismatchDiagnostics(doc *document.Document, 
 }
 
 // appendCommandVersion is the per-node command-version check, folded into
-// the single-pass tree collector (chunter-zob, see collectTreeDiagnostics in
+// the single-pass tree collector (chunt-zob, see collectTreeDiagnostics in
 // diagnostics.go). It emits a Hint for each command whose documented
 // MinVersion is later than the running version (recorded in a `! version X`
 // comment): the command was introduced after the image currently running the
@@ -75,7 +75,7 @@ func (f *CiscoIOSFeature) runVersionMismatchDiagnostics(doc *document.Document, 
 // modern running version — e.g. hostname=15.0 — which would flood clean
 // configs with false positives). Both version comparators refuse non-numeric
 // components, so a heuristic value like "3.9S" is treated as incomparable and
-// never flagged (chunter-y9d).
+// never flagged (chunt-y9d).
 //
 // The collector computes the running version once and only calls this when it
 // is non-empty; with no `! version X` comment this is never invoked. The
@@ -97,7 +97,7 @@ func (f *CiscoIOSFeature) appendCommandVersion(diags *[]protocol.Diagnostic, n *
 	*diags = append(*diags, protocol.Diagnostic{
 		Range:    protocol.LineRange(n.StartPosition().Row, n.StartPosition().Column, n.EndPosition().Column),
 		Severity: protocol.SeverityHint,
-		Source:   "chunter",
+		Source:   "chunt",
 		Code:     "version-introduced",
 		Message:  fmt.Sprintf("%s was introduced in release %s, later than the running version %s", name, kw.MinVersion, runVer),
 	})

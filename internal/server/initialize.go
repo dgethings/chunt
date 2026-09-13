@@ -6,7 +6,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 type InitializeParams struct {
@@ -29,7 +29,7 @@ func (s *Server) Initialize(ctx context.Context, params InitializeParams) (proto
 			CompletionProvider:     &protocol.CompletionOptions{},
 		},
 		ServerInfo: protocol.ServerInfo{
-			Name:    "chunter",
+			Name:    "chunt",
 			Version: s.version,
 		},
 	}, nil

@@ -9,22 +9,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-// Measurement harness for chunter-cfz (progressive/streamed diagnostics).
+// Measurement harness for chunt-cfz (progressive/streamed diagnostics).
 //
-// This is NOT part of the normal test suite: it is gated behind CHUNTER_PERF=1
+// This is NOT part of the normal test suite: it is gated behind CHUNT_PERF=1
 // so `make test-lsp` is unaffected. Run explicitly:
 //
-//	CHUNTER_PERF=1 CGO_ENABLED=1 go test ./internal/features/cisco_ios_jinja2/ \
+//	CHUNT_PERF=1 CGO_ENABLED=1 go test ./internal/features/cisco_ios_jinja2/ \
 //	  -run '^TestPipelineTiming$' -v -count=1
 //
 // It instruments the current didOpen/didChange pipeline (parse -> symbols.Index
 // -> every diagnostic pass) on a synthesized large multi-section config and
-// prints a per-stage breakdown. The numbers answer chunter-cfz Q1: does parse
+// prints a per-stage breakdown. The numbers answer chunt-cfz Q1: does parse
 // dominate, or is there meaningful post-parse pass time that progressive
 // publishing could surface to the user sooner?
 //
@@ -38,8 +38,8 @@ import (
 // measures Parse(newContent, oldTree) after a 1-char edit to confirm the old
 // tree hint buys nothing without an edit.
 func TestPipelineTiming(t *testing.T) {
-	if os.Getenv("CHUNTER_PERF") != "1" {
-		t.Skip("set CHUNTER_PERF=1 to run the pipeline-timing measurement (chunter-cfz)")
+	if os.Getenv("CHUNT_PERF") != "1" {
+		t.Skip("set CHUNT_PERF=1 to run the pipeline-timing measurement (chunt-cfz)")
 	}
 
 	for _, n := range []int{50, 200, 1000} {
@@ -105,7 +105,7 @@ func TestPipelineTiming(t *testing.T) {
 			fn   func() int
 		}
 		passes := []pass{
-			// tree-collector is the merged single-pass walk (chunter-zob) folding
+			// tree-collector is the merged single-pass walk (chunt-zob) folding
 			// syntax + command-version + wrong-section + protocol-mismatch.
 			{"tree-collector", func() int { return len(f.collectTreeDiags(doc, tree)) }},
 			{"version-mismatch", func() int { return len(f.runVersionMismatchDiagnostics(doc, tree)) }},
@@ -144,13 +144,13 @@ func TestPipelineTiming(t *testing.T) {
 }
 
 // TestTieredLatency measures the perceived-latency win of progressive
-// publishing (chunter-cfz): how soon tier 1 (tree-only diagnostics) is
+// publishing (chunt-cfz): how soon tier 1 (tree-only diagnostics) is
 // published vs. how long the full pipeline (including symbols.Index + ref
 // passes) takes to return. The win = tier-1 publish latency vs full-pipeline
 // latency — i.e. when the user SEES the bulk of the diagnostics.
 func TestTieredLatency(t *testing.T) {
-	if os.Getenv("CHUNTER_PERF") != "1" {
-		t.Skip("set CHUNTER_PERF=1 to run the tiered-latency measurement (chunter-cfz)")
+	if os.Getenv("CHUNT_PERF") != "1" {
+		t.Skip("set CHUNT_PERF=1 to run the tiered-latency measurement (chunt-cfz)")
 	}
 
 	for _, n := range []int{50, 200, 1000} {

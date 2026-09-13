@@ -34,6 +34,7 @@ EOF
 ```
 
 Consequences:
+
 - ACL body lines (`permit ...` / `deny ...`) are not nested under their
   parent ACL. They are top-level statements.
 - Numbered ACL parsing is split across `command_line(access)` and a sibling
@@ -47,8 +48,8 @@ Consequences:
 Functionally, ACL def/ref resolution ALREADY WORKS today (verified):
 
 ```
-$ chunter check acl-demo.ios.j2
-acl-demo.ios.j2:9:18: [chunter] undefined acl "ACL-MISSING"
+$ chunt check acl-demo.ios.j2
+acl-demo.ios.j2:9:18: [chunt] undefined acl "ACL-MISSING"
 ```
 
 So this plan is a structural / hygiene improvement, not a feature gap.
@@ -131,6 +132,7 @@ So this plan is a structural / hygiene improvement, not a feature gap.
 ### Disambiguation analysis
 
 At line start of `ip access-list standard FOO`:
+
 - Lexer state expects `identifier` (for command_line) OR `identifier` (for ip_access_list_header).
 - Lexer produces `ip` as identifier (no promotion).
 - After identifier, parser state expects:
@@ -142,6 +144,7 @@ At line start of `ip access-list standard FOO`:
 - ip_access_list_header has `prec.right`, command_line has `prec.right`. Need to verify with `tree-sitter generate` whether this generates a conflict; if so, add `[ip_access_list_header]` to the grammar's `conflicts: $ => [...]` list, or bump ip_access_list_header to `prec.right(2)`.
 
 At line start of `access-list 101 permit ip any any` (numbered):
+
 - Lexer state expects `identifier` (for command_line) OR `access_list_kw` (for access_list_statement).
 - Identifier matches "access" (6 chars); access_list_kw matches "access-list" (11 chars).
 - Longest match wins → `access_list_kw`.
@@ -151,6 +154,7 @@ At line start of `access-list 101 permit ip any any` (numbered):
 ### Corpus tests (test/corpus/)
 
 Add a new file `ip-access-list.txt` covering:
+
 - Named standard ACL with `permit` body
 - Named extended ACL with `permit tcp ... eq 443` body
 - Named ACL with `deny` body
@@ -230,15 +234,15 @@ Update `access-list.txt` corpus if any existing test asserted the old
    Run `make test` in the TS repo — all 186 existing + new tests must
    pass.
 3. Commit the grammar change in the TS repo, bumping the parser hash
-   via `bindings/go/parser_hash.go` (chunter's Makefile does this
+   via `bindings/go/parser_hash.go` (chunt's Makefile does this
    automatically on the next build).
 4. Symbols: add the new `sectionSpec` entry, replace the numbered-ACL
    regex path with the direct `access_list_statement` walk, delete the
    named-ACL `command_line(ip)` special case. Update `symbols_test.go`
    to assert the new AST shape; symbol NAMES stay the same.
-5. Re-run `make test-lsp` and `chunter check` smoke tests. No behavior
+5. Re-run `make test-lsp` and `chunt check` smoke tests. No behavior
    change should be visible to end users (the same diagnostics fire).
-6. Commit the symbols change in chunter.
+6. Commit the symbols change in chunt.
 
 ### Out of scope
 

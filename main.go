@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/dgethings/chunter/cmd"
+	"github.com/dgethings/chunt/cmd"
 )
 
 var version = "dev"

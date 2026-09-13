@@ -3,8 +3,8 @@ package cisco_ios_jinja2
 import (
 	"context"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // Definition implements textDocument/definition. Resolution rules, in order:

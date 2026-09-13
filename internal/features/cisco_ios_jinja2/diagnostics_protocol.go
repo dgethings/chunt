@@ -3,8 +3,8 @@ package cisco_ios_jinja2
 import (
 	"strings"
 
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/section"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/section"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -42,7 +42,7 @@ var keywordToProtocol = map[string]string{
 }
 
 // appendProtocolMismatch is the per-node cross-protocol check, folded into
-// the single-pass tree collector (chunter-zob, see collectTreeDiagnostics in
+// the single-pass tree collector (chunt-zob, see collectTreeDiagnostics in
 // diagnostics.go). It emits an Error when a command owned by one routing
 // protocol appears inside another protocol's router (or address-family)
 // section — e.g. an OSPF "area" command under "router bgp". This is
@@ -58,7 +58,7 @@ var keywordToProtocol = map[string]string{
 // shared by both protocols are absent from the registry and are therefore
 // never flagged. The collector only calls this on named command-like nodes;
 // negated_statement is descended into so "no area ..." is still flagged. v1
-// covers bgp <-> ospf only (chunter-pwz).
+// covers bgp <-> ospf only (chunt-pwz).
 func (f *CiscoIOSFeature) appendProtocolMismatch(diags *[]protocol.Diagnostic, n *sitter.Node, content []byte) {
 	kind := n.Kind()
 
@@ -97,7 +97,7 @@ func (f *CiscoIOSFeature) appendProtocolMismatch(diags *[]protocol.Diagnostic, n
 			n.EndPosition().Column,
 		),
 		Severity: protocol.SeverityError,
-		Source:   "chunter",
+		Source:   "chunt",
 		Code:     "protocol-mismatch",
 		Message:  cmd + " is " + article(display) + " " + display + " command, not valid under \"router " + encProto + "\"",
 	})

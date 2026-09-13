@@ -3,13 +3,13 @@ package cisco_ios_jinja2
 import (
 	"strings"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 // The diagnostic passes split into two tiers for progressive publishing
-// (chunter-cfz; see DESIGN-chunter-cfz-progressive-diagnostics.md):
+// (chunt-cfz; see DESIGN-chunt-cfz-progressive-diagnostics.md):
 //
 //   - runTreeDiagnostics: passes that depend ONLY on the parse tree + keyword
 //     DB (NOT the symbol table). These can be published as tier 1 immediately
@@ -30,7 +30,7 @@ import (
 //     Scans only top-level named children for the `! version X` comment and
 //     `version Y` statement; NOT a full tree walk, so it stays its own pass.
 //  B. merged tree collector (collectTreeDiags) — ONE full walk of the tree
-//     (chunter-zob) folding the per-node checks that each used to walk the
+//     (chunt-zob) folding the per-node checks that each used to walk the
 //     whole tree independently:
 //       - syntax / missing  (Error/Warning) — diagnostics_syntax.go
 //       - command version   (SeverityHint)  — diagnostics_version.go
@@ -52,7 +52,7 @@ func (f *CiscoIOSFeature) runTreeDiagnostics(doc *document.Document, tree *sitte
 }
 
 // collectTreeDiags is the single-pass tree-walking diagnostic collector
-// (chunter-zob). It folds the per-node checks that previously each walked the
+// (chunt-zob). It folds the per-node checks that previously each walked the
 // whole tree — syntax/MISSING (appendSyntaxDiag), command-version
 // (appendCommandVersion), wrong-section (appendWrongSection), and
 // protocol-mismatch (appendProtocolMismatch) — into ONE traversal of the parse

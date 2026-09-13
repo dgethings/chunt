@@ -6,7 +6,7 @@ import "testing"
 // dot-versions compare component-wise; differing lengths resolve on the
 // non-zero tail; any non-integer component makes the pair incomparable so the
 // diagnostic pass refuses to flag on heuristic values like "3.9S"
-// (chunter-y9d).
+// (chunt-y9d).
 func TestCompareVersions(t *testing.T) {
 	cases := []struct {
 		name       string

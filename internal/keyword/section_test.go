@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/keyword"
+	"github.com/dgethings/chunt/internal/keyword"
 )
 
 func TestBuildSectionTree_BasicHierarchy(t *testing.T) {

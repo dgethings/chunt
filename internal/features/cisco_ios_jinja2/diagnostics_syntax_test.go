@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // findDiagBySeverityPrefix returns the first diagnostic whose severity matches
@@ -45,8 +45,8 @@ func TestSyntaxDiagnostics_MissingEosAtEOF(t *testing.T) {
 	if !strings.Contains(d.Message, `interface Gi0/0`) {
 		t.Errorf("message should name the section header: %q", d.Message)
 	}
-	if d.Source != "chunter" {
-		t.Errorf("source: got %q, want \"chunter\"", d.Source)
+	if d.Source != "chunt" {
+		t.Errorf("source: got %q, want \"chunt\"", d.Source)
 	}
 	// Anchored on the header (line 0), spanning "interface Gi0/0".
 	if d.Range.Start.Line != 0 || d.Range.End.Line != 0 {
@@ -150,7 +150,7 @@ func TestSyntaxDiagnostics_MissingToken(t *testing.T) {
 	}
 }
 
-// TestSyntaxDiagnostics_UnclosedJinjaSwallowedByError guards chunter-9of
+// TestSyntaxDiagnostics_UnclosedJinjaSwallowedByError guards chunt-9of
 // symptom 1: when an unterminated section is immediately followed by an
 // unclosed jinja `{{`, error recovery wraps both into a single ERROR node and
 // the bare `{{` token never forms an `output` node, so there is no MISSING

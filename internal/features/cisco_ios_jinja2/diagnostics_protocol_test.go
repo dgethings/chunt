@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // TestProtocolMismatchDiagnostics covers the cross-protocol wrong-section pass
-// (chunter-pwz). A command owned by one routing protocol (resolved via the
+// (chunt-pwz). A command owned by one routing protocol (resolved via the
 // hybrid node-kind / keyword-text registry) and placed inside another
 // protocol's router or address-family section yields exactly one Error with
 // Code "protocol-mismatch"; same-protocol usage, shared commands, top-level
@@ -89,8 +89,8 @@ func TestProtocolMismatchDiagnostics(t *testing.T) {
 				if d.Severity != protocol.SeverityError {
 					t.Errorf("severity: got %d, want Error (1)", d.Severity)
 				}
-				if d.Source != "chunter" {
-					t.Errorf("source: got %q, want \"chunter\"", d.Source)
+				if d.Source != "chunt" {
+					t.Errorf("source: got %q, want \"chunt\"", d.Source)
 				}
 				for _, sub := range tc.wantSubs {
 					if !strings.Contains(d.Message, sub) {

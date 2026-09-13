@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/section"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/section"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 

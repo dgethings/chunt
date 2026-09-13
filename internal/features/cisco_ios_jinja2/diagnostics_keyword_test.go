@@ -13,7 +13,7 @@ import (
 // Note: "match ip address ACL" is also a known multi-word keyword, but it
 // parses as a dedicated match_statement node (because `match` is a prec-2
 // grammar keyword), and *_statement nodes are explicitly OUT OF SCOPE per the
-// chunter-y42 spec — they already carry a single-token leading keyword.
+// chunt-y42 spec — they already carry a single-token leading keyword.
 func TestWrongSectionDiagnostics_MultiWordKeyword(t *testing.T) {
 	cases := []struct {
 		name string

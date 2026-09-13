@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgethings/chunter/internal/symbols"
+	"github.com/dgethings/chunt/internal/symbols"
 	ts_ci "github.com/dgethings/tree-sitter-cisco-ios-jinja2/bindings/go"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -552,7 +552,7 @@ interface Gi1/0
 //
 //	go test ./internal/symbols/ -bench LookupScaling -benchmem
 //
-// chunter-4qw.
+// chunt-4qw.
 func BenchmarkLookupScaling(b *testing.B) {
 	for _, n := range []int{128, 1024, 8192} {
 		b.Run("symbols="+strconv.Itoa(n), func(b *testing.B) {

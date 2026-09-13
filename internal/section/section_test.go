@@ -3,8 +3,8 @@ package section_test
 import (
 	"testing"
 
-	"github.com/dgethings/chunter/internal/ast"
-	"github.com/dgethings/chunter/internal/section"
+	"github.com/dgethings/chunt/internal/ast"
+	"github.com/dgethings/chunt/internal/section"
 	ts_ci "github.com/dgethings/tree-sitter-cisco-ios-jinja2/bindings/go"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )

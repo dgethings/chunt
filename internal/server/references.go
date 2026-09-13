@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 // References dispatches textDocument/references to the registered feature.

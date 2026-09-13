@@ -3,9 +3,9 @@ package cisco_ios_jinja2
 import (
 	"fmt"
 
-	"github.com/dgethings/chunter/internal/document"
-	"github.com/dgethings/chunter/internal/protocol"
-	"github.com/dgethings/chunter/internal/symbols"
+	"github.com/dgethings/chunt/internal/document"
+	"github.com/dgethings/chunt/internal/protocol"
+	"github.com/dgethings/chunt/internal/symbols"
 )
 
 // runUndefinedReferenceDiagnostics emits a Warning for every reference whose
@@ -45,7 +45,7 @@ func (f *CiscoIOSFeature) runUndefinedReferenceDiagnostics(doc *document.Documen
 		diags = append(diags, protocol.Diagnostic{
 			Range:    r.Range,
 			Severity: protocol.SeverityWarning,
-			Source:   "chunter",
+			Source:   "chunt",
 			Code:     "undefined-" + string(r.Kind),
 			Message:  fmt.Sprintf("undefined %s %q", r.Kind, r.Name),
 		})
@@ -87,7 +87,7 @@ func (f *CiscoIOSFeature) runDuplicateDefinitionDiagnostics(doc *document.Docume
 			diags = append(diags, protocol.Diagnostic{
 				Range:    s.NameRange,
 				Severity: protocol.SeverityWarning,
-				Source:   "chunter",
+				Source:   "chunt",
 				Code:     "duplicate-" + string(s.Kind),
 				Message:  fmt.Sprintf("duplicate %s definition %q", s.Kind, s.Name),
 				RelatedInformation: []protocol.DiagnosticRelatedInformation{{

@@ -35,7 +35,7 @@ named `field("name", ...)`, a body of `repeat(choice($._nl, $._body_item))`, and
 a terminating `$.eos`.
 
 | New node | Header | `name` field | Body rules (already in `_command`) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `route_map_section` | `route-map NAME (permit\|deny) SEQ` | NAME | `match_statement`, `set_statement`, `continue_statement` |
 | `class_map_section` | `class-map [match-any\|match-all] NAME` | NAME | `match_statement`, `description_statement` |
 | `policy_map_section` | `policy-map NAME` | NAME | `class_statement`, `police_statement`, `priority_statement`, `drop_statement`, `random_detect_statement` |
@@ -62,7 +62,7 @@ Implementation notes:
   `../tree-sitter-cisco-ios-jinja2/test/corpus/`. Run `make test` there
   (regenerates `src/parser.c`, `src/grammar.json`, `src/node-types.json` and
   runs the corpus). Commit `src/` and `grammar.js` together.
-- `chunter`'s Makefile will auto-regen the Go binding via `.ts-gen-stamp`
+- `chunt`'s Makefile will auto-regen the Go binding via `.ts-gen-stamp`
   on the next `make test-lsp`.
 
 ## Phase 2 — Symbol table (new `internal/symbols/` package)

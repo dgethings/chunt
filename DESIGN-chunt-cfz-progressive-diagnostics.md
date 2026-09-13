@@ -1,4 +1,4 @@
-# Design note: chunter-cfz — Progressive/streamed diagnostics
+# Design note: chunt-cfz — Progressive/streamed diagnostics
 
 Status: **measurement complete; recommends RE-SCOPE to synchronous tiered publishing (not the async streaming originally sketched).**
 
@@ -11,7 +11,7 @@ committing*. We measured. **Parse does not dominate (~36%). The real dominator
 is `symbols.Index` (~49% of the full pipeline at 11k lines)** — and it sits on
 the critical path of *every* pass, yet only **two nearly-free passes** actually
 consume it (`undefined-refs` + `duplicate-defs`, <0.1ms combined after
-chunter-4qw's O(1) work). Every slow pass — `wrong-section`, `command-version`,
+chunt-4qw's O(1) work). Every slow pass — `wrong-section`, `command-version`,
 `protocol-mismatch` — walks the parse tree directly and needs **no** symbol
 table.
 
@@ -29,7 +29,7 @@ the risk.
 ## Q1 — Is the perceived-latency win real? (the measurement)
 
 **Method.** New gated harness `perf_pipeline_internal_test.go` (run with
-`CHUNTER_PERF=1`, `-race` off so it reflects production latency). Synthesizes a
+`CHUNT_PERF=1`, `-race` off so it reflects production latency). Synthesizes a
 realistic multi-section config from the golden fixtures' noise-free command set,
 scaled by `n`, and times each stage as the min of 20 runs. `didChange` today
 calls `parser.Parse(content, oldTree)` **without** `tree.Edit` (the
@@ -60,7 +60,7 @@ at n=50/200/1000; symbols.Index = 1.5× the entire pass sum at every scale).
 1. **Parse does not dominate** — refutes the issue's "if parse dominates, close
    as not-worth-it" premise. The issue stays open.
 2. **`symbols.Index` is the dominator** and is on the critical path for *all*
-   passes, but only feeds two passes that are **negligible** post-chunter-4qw.
+   passes, but only feeds two passes that are **negligible** post-chunt-4qw.
 3. The slow passes are all **tree-only** — verified by grep: only
    `diagnostics_refs.go` references `f.symbols`; syntax/version/section/protocol
    use `f.keyword` + the tree.
@@ -132,7 +132,7 @@ synchronous model captures essentially all the benefit.
 **Q5 — typing bursts.** Progressive publishing reduces *perceived* latency, not
 *per-keystroke work* — each keystroke still runs the full 147 ms pipeline
 (serially, so there is no flooding: at most 2 publishes/keystroke). A debounce
-is *complementary* but is its own decision (chunter-4qw deliberately dropped
+is *complementary* but is its own decision (chunt-4qw deliberately dropped
 it). **Ship progressive publishing alone for v1; revisit debounce separately**
 only if profiling shows the steady-state keystroke rate is the problem.
 
@@ -148,7 +148,7 @@ benefit evaporates for that client.
 
 ## Recommendation
 
-1. **Re-scope chunter-cfz** from "progressive/streamed diagnostics (async)" to
+1. **Re-scope chunt-cfz** from "progressive/streamed diagnostics (async)" to
    "**synchronous tiered publishing**" and turn it into concrete deliverables
    (below). Do **not** close it — the measurement refuted the close condition.
 2. **Do not** pursue the async/streaming-with-cancellation variant. Defer
@@ -159,7 +159,7 @@ benefit evaporates for that client.
    first completion/hover after a change) would remove it from the `didChange`
    path entirely. Separate, larger change; not cfz.
 
-### Proposed deliverables for the re-scoped chunter-cfz
+### Proposed deliverables for the re-scoped chunt-cfz
 
 - **D1** Split `runDiagnostics` into `runTreeDiagnostics` (syntax/version/
   command-version/wrong-section/protocol-mismatch) and `runRefDiagnostics`
@@ -177,7 +177,7 @@ benefit evaporates for that client.
 ## Measurement reproducibility
 
 ```bash
-CHUNTER_PERF=1 CGO_ENABLED=1 go test ./internal/features/cisco_ios_jinja2/ \
+CHUNT_PERF=1 CGO_ENABLED=1 go test ./internal/features/cisco_ios_jinja2/ \
   -run '^TestPipelineTiming$' -v -count=1
 ```
 
@@ -239,6 +239,6 @@ DTO-blocked effort noted in the issue.
 **Reproducibility (tiered latency):**
 
 ```bash
-CHUNTER_PERF=1 CGO_ENABLED=1 go test ./internal/features/cisco_ios_jinja2/ \
+CHUNT_PERF=1 CGO_ENABLED=1 go test ./internal/features/cisco_ios_jinja2/ \
   -run '^TestTieredLatency$' -v -count=1
 ```

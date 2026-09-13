@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/dgethings/chunter/internal/protocol"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 func (s *Server) Hover(ctx context.Context, params protocol.HoverParams) (*protocol.HoverResult, error) {
