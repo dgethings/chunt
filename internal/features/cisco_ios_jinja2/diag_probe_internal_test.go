@@ -98,3 +98,20 @@ func dump(t *testing.T, n *sitter.Node, content []byte, depth int) {
 		dump(t, n.NamedChild(i), content, depth+1)
 	}
 }
+
+// findFirst returns the first node (pre-order, named children only) whose
+// kind matches, or nil if none does.
+func findFirst(n *sitter.Node, kind string) *sitter.Node {
+	if n == nil {
+		return nil
+	}
+	if n.Kind() == kind {
+		return n
+	}
+	for i := uint(0); i < n.NamedChildCount(); i++ {
+		if got := findFirst(n.NamedChild(i), kind); got != nil {
+			return got
+		}
+	}
+	return nil
+}
