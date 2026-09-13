@@ -26,10 +26,10 @@ This command does not have a no form except for Cisco ASR 901 Series Aggregation
 <none>
 
 ## completion @ 47:1  config-if scope (inside the interface body)
-2718 items  sha256:601eef186a455ebe
+2620 items  sha256:e3b3c1ec25d1c4da
 
 ## completion @ 39:0  config-vlan scope
-14 items  sha256:02dda42ac35cd849
+14 items  sha256:ff167a1b8de023c3
 
 ## completion @ 54:0  global config scope (top-level line)
-3819 items  sha256:174806a2e8479b98
+3754 items  sha256:8973bea66f480e2e
