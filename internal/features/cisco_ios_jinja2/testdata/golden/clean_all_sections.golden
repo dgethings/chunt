@@ -33,3 +33,19 @@ This command does not have a no form except for Cisco ASR 901 Series Aggregation
 
 ## completion @ 54:0  global config scope (top-level line)
 3754 items  sha256:8973bea66f480e2e
+
+## documentSymbol  full outline across all symbol kinds (cursor is irrelevant; 0:0 is the format's placeholder)
+kind=11/Interface GigabitEthernet detail="interface" 7:0-10:1 sel=7:10-25
+kind=5/Class 100 detail="router" 13:0-18:1 sel=13:11-14
+kind=5/Class 1 detail="router" 20:0-21:1 sel=20:12-13
+kind=3/Namespace ACL-EXT detail="acl" 25:0-27:1 sel=25:24-31
+kind=5/Class RM-OUT detail="route-map" 30:0-32:1 sel=30:10-16
+kind=5/Class VOICE detail="class-map" 33:0-34:1 sel=33:20-25
+kind=5/Class QOS detail="policy-map" 35:0-38:1 sel=35:11-14
+kind=16/Number 99 detail="vlan" 39:0-40:1 sel=39:5-7
+kind=3/Namespace redundancy detail="redundancy" 41:0-42:1 sel=41:0-10
+kind=13/Variable vty-0-4 detail="line" 43:0-45:1 sel=43:0-12
+kind=11/Interface GigabitEthernet0/0 detail="interface" 46:0-53:1 sel=46:10-28
+kind=13/Variable r1 detail="hostname" 4:0-11 sel=4:9-11
+kind=3/Namespace ACL-STD detail="acl" 22:0-31 sel=22:24-31
+kind=3/Namespace 10 detail="acl" 28:0-40 sel=28:12-14

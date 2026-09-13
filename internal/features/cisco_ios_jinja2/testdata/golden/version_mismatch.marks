@@ -1,0 +1,6 @@
+# Cursor marks for version_mismatch.cfg — definition coverage. Coordinates
+# are 0-indexed (LSP Position semantics) and match the .cfg byte offsets.
+#
+# Format:  <line>:<col> <feature> <optional free-form note>
+
+4:10 definition   on hostname "r1" definition -> itself

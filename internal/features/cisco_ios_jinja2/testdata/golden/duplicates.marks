@@ -1,0 +1,16 @@
+# Cursor marks for duplicates.cfg — definition/references interacting with
+# duplicate definitions. Coordinates are 0-indexed (LSP Position semantics)
+# and match the .cfg byte offsets.
+#
+# Format:  <line>:<col> <feature> <optional free-form note>
+
+# definition marks -------------------------------------------------------
+0:11 definition   on the first route-map "FOO" definition -> itself
+2:11 definition   on the duplicate route-map "FOO" definition -> itself (SymbolAt honors the site the cursor is on)
+21:22 definition  on a route-map "FOO" reference -> BOTH duplicate definitions (Lookup yields every matching definition)
+
+# references marks -------------------------------------------------------
+0:11 references-decl  from the first "FOO" -> the usage plus both duplicate declarations
+0:11 references       from the first "FOO" -> just the usage (declaration excluded)
+21:22 references-decl from the reference itself -> its own site plus both declarations
+14:12 references      from the duplicate router "100" -> no usages -> <none>

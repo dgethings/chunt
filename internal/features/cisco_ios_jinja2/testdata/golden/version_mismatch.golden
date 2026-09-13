@@ -3,3 +3,6 @@
 
 ## diagnostics
 ERROR    version-mismatch       2:0-12 | running version and configured version mismatch
+
+## definition @ 4:10  on hostname "r1" definition -> itself
+version_mismatch.cfg 4:9-11

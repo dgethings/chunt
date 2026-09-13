@@ -8,3 +8,15 @@ WARNING  undefined-vlan         3:24-27 | undefined vlan "999"
 WARNING  undefined-class-map    6:7-10 | undefined class-map "CM1"
 WARNING  undefined-acl          9:14-18 | undefined acl "ACL2"
 WARNING  undefined-policy-map   11:21-24 | undefined policy-map "PM2"
+
+## definition @ 1:18  on undefined acl reference "ACL1" -> <none> (no target)
+<none>
+
+## definition @ 2:22  on undefined route-map reference "RM1" -> <none>
+<none>
+
+## references @ 1:18  on undefined acl reference "ACL1" -> its own site only
+undefined_refs.cfg 1:17-21
+
+## references-decl @ 9:15  on undefined acl reference "ACL2"; no declaration exists to include
+undefined_refs.cfg 9:14-18

@@ -3,8 +3,9 @@
 This directory holds table-driven **golden-file** integration tests for the
 Cisco IOS + Jinja2 LSP feature set. Each fixture feeds a realistic config
 through the *full* feature pipeline (parse → `symbols.Index` → every
-diagnostic pass, plus `Completion` / `Hover` at marked cursor positions) and
-compares the output against a checked-in `.golden` file. A deliberate
+diagnostic pass, plus `Completion` / `Hover` / `Definition` / `References` /
+`DocumentSymbol` at marked cursor positions) and compares the output against a
+checked-in `.golden` file. A deliberate
 regression therefore surfaces as a readable diff in the test output, and
 regenerating the goldens surfaces behavioral changes as a PR diff.
 
@@ -35,10 +36,23 @@ One cursor position per line, **0-indexed** (LSP `Position` semantics):
 # blank lines and lines starting with '#' are ignored
 4:0 hover       hostname keyword -> docstring
 47:1 completion config-if scope (inside the interface body)
+1:18 definition on the acl reference "ACL1" -> <none> when undefined
+0:11 references-decl from a definition -> every usage plus declarations
+0:0 documentSymbol full outline (cursor is irrelevant; 0:0 is the placeholder)
 ```
 
-Format: `<line>:<col> <feature> [free-form note…]`. `<feature>` is `hover` or
-`completion`. The optional trailing text is echoed into the golden header as a
+Format: `<line>:<col> <feature> [free-form note…]`. `<feature>` is one of:
+
+| feature           | feature call                                                  |
+| ----------------- | ------------------------------------------------------------- |
+| `completion`      | `Completion` at the position                                   |
+| `hover`           | `Hover` at the position                                        |
+| `definition`      | `Definition` at the position                                   |
+| `references`      | `References` at the position, `includeDeclaration=false`        |
+| `references-decl` | `References` at the position, `includeDeclaration=true`         |
+| `documentSymbol`  | `DocumentSymbol` for the whole document — position is ignored; convention is `0:0` |
+
+The optional trailing text is echoed into the golden header as a
 human annotation — handy for explaining *why* a position is interesting.
 
 ### How cursor-sensitive output is rendered
@@ -73,6 +87,34 @@ human annotation — handy for explaining *why* a position is interesting.
   moved. Picking marks in *different* section scopes (e.g. `config-if`,
   `config-vlan`, global `config`) makes the wiring signal obvious — each scope
   yields a distinct count.
+
+* **Definition / References** — one `<file> <range>` per line, sorted by
+  `(uri, range start, range end)` so the golden is stable regardless of the
+  order the symbol table yields (`References` appends declarations after the
+  reference sites; sorting normalizes that). An empty result renders an
+  explicit `<none>` — the interesting case for an undefined name
+  (`undefined_refs.cfg`) or a definition with no usages:
+
+  ```text
+  undefined_refs.cfg 1:17-21
+  <none>
+  ```
+
+  Pairs of `references` / `references-decl` marks at the same position make
+  the includeDeclaration split visible in the diff. A reference to a name with
+  duplicate definitions resolves to **all** of them (`duplicates.cfg`) — that
+  cross-feature interaction is exactly what this tier guards.
+
+* **DocumentSymbol** — the outline rendered as a flat, indented tree, one
+  symbol per line: `kind=<num>/<Name> <name> [detail=<detail>] <range>
+  sel=<selectionRange>`. Siblings stay in document order (the order
+  `DocumentSymbol` returns); children are rendered recursively (empty today).
+  The `0:0 documentSymbol` mark renders the whole outline regardless of the
+  cursor:
+
+  ```text
+  kind=11/Interface GigabitEthernet0/0 detail="interface" 46:0-53:1 sel=46:10-28
+  ```
 
 ## Adding a fixture
 

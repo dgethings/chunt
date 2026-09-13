@@ -5,3 +5,9 @@
 HINT     <no-code>              1:1-11 | speed is valid in config-if, not in config-router
 HINT     <no-code>              2:1-12 | hostname is valid in config, not in config-router
 HINT     <no-code>              5:1-37 | aggregate-address is valid in config-router-af, not in config-if
+
+## definition @ 0:12  on the router "100" definition -> itself
+wrong_section.cfg 0:11-14
+
+## references-decl @ 2:11  on hostname "r1" (nested inside the router section) -> its declaration
+wrong_section.cfg 2:10-12

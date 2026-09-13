@@ -1,0 +1,8 @@
+# Cursor marks for wrong_section.cfg — definition/references coverage on a
+# fixture whose sections nest badly. Coordinates are 0-indexed (LSP Position
+# semantics) and match the .cfg byte offsets.
+#
+# Format:  <line>:<col> <feature> <optional free-form note>
+
+0:12 definition      on the router "100" definition -> itself
+2:11 references-decl on hostname "r1" (nested inside the router section) -> its declaration
