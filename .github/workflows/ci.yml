@@ -1,0 +1,29 @@
+# CI gate: run the test suite and enforce the coverage floor on every push to
+# main and every pull request. This is the repo's first CI — before this,
+# tests only ran as goreleaser before-hooks at release time.
+#
+# Self-contained by design: the tree-sitter grammar is consumed as a published
+# Go module (go.mod require), so no sibling checkout is needed. The Makefile
+# targets set CGO_ENABLED=1 themselves; gcc ships on ubuntu-latest.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: make test
+
+      - name: Coverage floor
+        run: make cover
