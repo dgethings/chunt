@@ -38,13 +38,13 @@ type DiagnosticRelatedInformation struct {
 }
 
 type Diagnostic struct {
-	Range              Range                             `json:"range"`
-	Severity           int                               `json:"severity"`
-	Source             string                            `json:"source"`
-	Message            string                            `json:"message"`
-	Code               string                            `json:"code,omitempty"`
-	Tags               []int                             `json:"tags,omitempty"`
-	RelatedInformation []DiagnosticRelatedInformation   `json:"relatedInformation,omitempty"`
+	Range              Range                          `json:"range"`
+	Severity           int                            `json:"severity"`
+	Source             string                         `json:"source"`
+	Message            string                         `json:"message"`
+	Code               string                         `json:"code,omitempty"`
+	Tags               []int                          `json:"tags,omitempty"`
+	RelatedInformation []DiagnosticRelatedInformation `json:"relatedInformation,omitempty"`
 }
 
 func LineRange(line, start, end uint) Range {

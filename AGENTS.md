@@ -68,10 +68,12 @@ bd close bd-42 --reason "Completed" --json
 5. **Complete**: `bd close <id> --reason "Done"`
 
 ### Quality
+
 - Use `--acceptance` and `--design` fields when creating issues
 - Use `--validate` to check description completeness
 
 ### Lifecycle
+
 - `bd defer <id>` / `bd supersede <id>` for issue management
 - `bd stale` / `bd orphans` / `bd lint` for hygiene
 - `bd human <id>` to flag for human decisions
@@ -84,7 +86,7 @@ bd automatically syncs via Dolt:
 - Each write auto-commits to Dolt history
 - No manual export/import needed!
 
-**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
+**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See <https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md> for details and anti-patterns.
 
 ### Important Rules
 
@@ -108,23 +110,25 @@ For more details, see README.md and docs/QUICKSTART.md.
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
 4. **PUSH TO REMOTE** - This is MANDATORY:
+
    ```bash
    git pull --rebase
    git push
    git status  # MUST show "up to date with origin"
    ```
+
 5. **Clean up** - Clear stashes, prune remote branches
 6. **Verify** - All changes committed AND pushed
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
 <!-- END BEADS INTEGRATION -->
-
 
 ## Build & Test
 

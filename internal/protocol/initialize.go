@@ -15,13 +15,13 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	PositionEncoding       string              `json:"positionEncoding,omitempty"`
-	TextDocumentSync       int                 `json:"textDocumentSync"`
-	HoverProvider          bool                `json:"hoverProvider"`
-	DefinitionProvider     bool                `json:"definitionProvider"`
-	ReferencesProvider     bool                `json:"referencesProvider"`
-	DocumentSymbolProvider bool                `json:"documentSymbolProvider"`
-	CompletionProvider     *CompletionOptions  `json:"completionProvider,omitempty"`
+	PositionEncoding       string             `json:"positionEncoding,omitempty"`
+	TextDocumentSync       int                `json:"textDocumentSync"`
+	HoverProvider          bool               `json:"hoverProvider"`
+	DefinitionProvider     bool               `json:"definitionProvider"`
+	ReferencesProvider     bool               `json:"referencesProvider"`
+	DocumentSymbolProvider bool               `json:"documentSymbolProvider"`
+	CompletionProvider     *CompletionOptions `json:"completionProvider,omitempty"`
 }
 
 type CompletionOptions struct {

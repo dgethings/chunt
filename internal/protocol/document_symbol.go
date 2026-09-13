@@ -19,13 +19,13 @@ type DocumentSymbolParams struct {
 // `class` block); for v1 chunt returns a flat list and leaves Children
 // empty.
 type DocumentSymbol struct {
-	Name           string               `json:"name"`
-	Detail         string               `json:"detail,omitempty"`
-	Kind           int                  `json:"kind"`
-	Tags           []int                `json:"tags,omitempty"`
-	Range          Range                `json:"range"`
-	SelectionRange Range                `json:"selectionRange"`
-	Children       []DocumentSymbol     `json:"children,omitempty"`
+	Name           string           `json:"name"`
+	Detail         string           `json:"detail,omitempty"`
+	Kind           int              `json:"kind"`
+	Tags           []int            `json:"tags,omitempty"`
+	Range          Range            `json:"range"`
+	SelectionRange Range            `json:"selectionRange"`
+	Children       []DocumentSymbol `json:"children,omitempty"`
 }
 
 // LSP SymbolKind enum values. Only the kinds chunt uses are listed; the

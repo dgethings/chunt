@@ -10,8 +10,8 @@ type DidOpenTextDocumentParams struct {
 }
 
 type DidChangeTextDocumentParams struct {
-	TextDocument   VersionedTextDocumentIdentifier    `json:"textDocument"`
-	ContentChanges []TextDocumentContentChangeEvent   `json:"contentChanges"`
+	TextDocument   VersionedTextDocumentIdentifier  `json:"textDocument"`
+	ContentChanges []TextDocumentContentChangeEvent `json:"contentChanges"`
 }
 
 type TextDocumentContentChangeEvent struct {
