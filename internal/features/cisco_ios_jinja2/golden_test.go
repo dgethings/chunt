@@ -5,8 +5,9 @@ package cisco_ios_jinja2_test
 // This file adds an integration test tier ON TOP of the inline unit tests in
 // the other *_test.go files. It feeds representative, realistic show-run-style
 // configs (plus Jinja2 constructs) through the full feature pipeline
-// (parse → symbols.Index → runDiagnostics, and Completion/Hover at marked
-// cursor positions) and compares the result against checked-in .golden files.
+// (parse → symbols.Index → runDiagnostics, and Completion/Hover/Definition/
+// References/DocumentSymbol at marked cursor positions) and compares the result
+// against checked-in .golden files.
 // A deliberate regression therefore surfaces as a readable diff in the test
 // output, and `go test -update` regenerates the goldens so PR diffs expose
 // behavioral changes.
@@ -107,8 +108,41 @@ func runGolden(t *testing.T, name string) {
 			}
 			fmt.Fprintf(&out, "\n## hover @ %d:%d%s\n", m.line, m.col, markNote(m.note))
 			out.WriteString(formatHover(hv))
+		case "definition":
+			locs, err := f.Definition(context.Background(), doc, pos)
+			if err != nil {
+				t.Fatalf("%s: definition @ %d:%d: %v", name, m.line, m.col, err)
+			}
+			fmt.Fprintf(&out, "\n## definition @ %d:%d%s\n", m.line, m.col, markNote(m.note))
+			out.WriteString(formatLocations(locs))
+		case "references":
+			locs, err := f.References(context.Background(), doc, pos, false)
+			if err != nil {
+				t.Fatalf("%s: references @ %d:%d: %v", name, m.line, m.col, err)
+			}
+			fmt.Fprintf(&out, "\n## references @ %d:%d%s\n", m.line, m.col, markNote(m.note))
+			out.WriteString(formatLocations(locs))
+		case "references-decl":
+			// References with includeDeclaration=true: every usage plus the
+			// matching definition site(s).
+			locs, err := f.References(context.Background(), doc, pos, true)
+			if err != nil {
+				t.Fatalf("%s: references-decl @ %d:%d: %v", name, m.line, m.col, err)
+			}
+			fmt.Fprintf(&out, "\n## references-decl @ %d:%d%s\n", m.line, m.col, markNote(m.note))
+			out.WriteString(formatLocations(locs))
+		case "documentSymbol":
+			// The cursor is irrelevant for documentSymbol; the `0:0` position
+			// in the mark line is just the format's required placeholder, so
+			// the golden header deliberately omits it.
+			syms, err := f.DocumentSymbol(context.Background(), doc)
+			if err != nil {
+				t.Fatalf("%s: documentSymbol: %v", name, err)
+			}
+			fmt.Fprintf(&out, "\n## documentSymbol%s\n", markNote(m.note))
+			out.WriteString(formatDocumentSymbols(syms))
 		default:
-			t.Fatalf("%s: unknown mark feature %q (want \"completion\" or \"hover\")", name, m.feature)
+			t.Fatalf("%s: unknown mark feature %q (want \"completion\", \"hover\", \"definition\", \"references\", \"references-decl\", or \"documentSymbol\")", name, m.feature)
 		}
 	}
 
@@ -134,7 +168,7 @@ func runGolden(t *testing.T, name string) {
 type mark struct {
 	line    uint
 	col     uint
-	feature string // "completion" or "hover"
+	feature string // "completion", "hover", "definition", "references", "references-decl", "documentSymbol"
 	note    string // optional human annotation (not compared, just echoed)
 }
 
@@ -143,9 +177,11 @@ type mark struct {
 //	# <line>:<col> <feature> <optional note>     (leading '# ' marks it as a comment header)
 //	<line>:<col> <feature>
 //
-// Blank lines and lines whose first token starts with '#' are ignored. Tokens
-// after the feature are treated as a free-form note echoed into the golden
-// header (handy for explaining WHY a position is interesting).
+// Blank lines and lines whose first token starts with '#' are ignored. The
+// position is `0:0` for documentSymbol (the only document-wide feature; the
+// cursor is ignored). Tokens after the feature are treated as a free-form note
+// echoed into the golden header (handy for explaining WHY a position is
+// interesting).
 func readMarks(t *testing.T, name string) []mark {
 	t.Helper()
 	marksPath := filepath.Join(goldenDir, name+".marks")
@@ -267,6 +303,97 @@ func formatHover(hv *protocol.HoverResult) string {
 		v = v[:hoverPreviewBytes] + fmt.Sprintf("\n… [truncated, %d bytes total]", len(hv.Contents.Value))
 	}
 	return fmt.Sprintf("kind=%s\n%s\n", hv.Contents.Kind, v)
+}
+
+// formatLocations renders Definition/References results: one `<uri> <range>`
+// per line, sorted by (uri, range start, range end) so the golden is stable
+// regardless of the order the symbol table yields (References appends the
+// declaration after the reference sites; sorting normalizes that). Empty input
+// renders an explicit "<none>" — the interesting case for an undefined name.
+func formatLocations(locs []protocol.Location) string {
+	if len(locs) == 0 {
+		return "<none>\n"
+	}
+	sorted := append([]protocol.Location(nil), locs...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].URI != sorted[j].URI {
+			return sorted[i].URI < sorted[j].URI
+		}
+		a, b := sorted[i].Range.Start, sorted[j].Range.Start
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		if a.Character != b.Character {
+			return a.Character < b.Character
+		}
+		ae, be := sorted[i].Range.End, sorted[j].Range.End
+		if ae.Line != be.Line {
+			return ae.Line < be.Line
+		}
+		return ae.Character < be.Character
+	})
+	var sb strings.Builder
+	for _, l := range sorted {
+		fmt.Fprintf(&sb, "%s %s\n", shortURI(l.URI), formatRange(l.Range))
+	}
+	return sb.String()
+}
+
+// formatDocumentSymbols renders the document outline as an indented tree, one
+// symbol per line:
+//
+//	<indent>kind=<num>/<Name> <name> [detail=<detail>] <range> sel=<selectionRange>
+//
+// Siblings stay in document order (the order DocumentSymbol returns; the
+// outline semantic), and children — empty today but rendered recursively so
+// nested outlines (e.g. class blocks under a policy-map) golden-test cleanly
+// when they arrive. Empty input renders an explicit "<none>".
+func formatDocumentSymbols(syms []protocol.DocumentSymbol) string {
+	if len(syms) == 0 {
+		return "<none>\n"
+	}
+	var sb strings.Builder
+	writeSymbolTree(&sb, syms, 0)
+	return sb.String()
+}
+
+func writeSymbolTree(sb *strings.Builder, syms []protocol.DocumentSymbol, depth int) {
+	for _, s := range syms {
+		fmt.Fprintf(sb, "%skind=%d/%s %s", strings.Repeat("  ", depth), s.Kind, symbolKindName(s.Kind), s.Name)
+		if s.Detail != "" {
+			fmt.Fprintf(sb, " detail=%q", s.Detail)
+		}
+		fmt.Fprintf(sb, " %s sel=%s\n", formatRange(s.Range), formatRange(s.SelectionRange))
+		writeSymbolTree(sb, s.Children, depth+1)
+	}
+}
+
+// symbolKindName maps an LSP SymbolKind number to its spec name (mirroring the
+// constants in internal/protocol/document_symbol.go) so the golden reads
+// `kind=11/Interface` instead of a bare number. Unknown kinds fall back to a
+// stable numeric label rather than erroring — the number is still compared.
+func symbolKindName(kind int) string {
+	switch kind {
+	case protocol.SymbolKindNamespace:
+		return "Namespace"
+	case protocol.SymbolKindClass:
+		return "Class"
+	case protocol.SymbolKindMethod:
+		return "Method"
+	case protocol.SymbolKindField:
+		return "Field"
+	case protocol.SymbolKindInterface:
+		return "Interface"
+	case protocol.SymbolKindFunction:
+		return "Function"
+	case protocol.SymbolKindVariable:
+		return "Variable"
+	case protocol.SymbolKindConstant:
+		return "Constant"
+	case protocol.SymbolKindNumber:
+		return "Number"
+	}
+	return fmt.Sprintf("Kind%d", kind)
 }
 
 // formatRange renders an LSP range compactly: "L:C-C" for a single-line span,

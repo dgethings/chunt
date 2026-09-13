@@ -7,3 +7,29 @@ WARNING  duplicate-class-map    6:20-23 | duplicate class-map definition "BAR"  
 WARNING  duplicate-interface    10:10-15 | duplicate interface definition "Gi0/0"  ~> duplicates.cfg 8:10-15 "first defined here"
 WARNING  duplicate-router       14:11-14 | duplicate router definition "100"  ~> duplicates.cfg 12:11-14 "first defined here"
 WARNING  duplicate-hostname     18:9-11 | duplicate hostname definition "r1"  ~> duplicates.cfg 16:9-11 "first defined here"
+
+## definition @ 0:11  on the first route-map "FOO" definition -> itself
+duplicates.cfg 0:10-13
+
+## definition @ 2:11  on the duplicate route-map "FOO" definition -> itself (SymbolAt honors the site the cursor is on)
+duplicates.cfg 2:10-13
+
+## definition @ 21:22  on a route-map "FOO" reference -> BOTH duplicate definitions (Lookup yields every matching definition)
+duplicates.cfg 0:10-13
+duplicates.cfg 2:10-13
+
+## references-decl @ 0:11  from the first "FOO" -> the usage plus both duplicate declarations
+duplicates.cfg 0:10-13
+duplicates.cfg 2:10-13
+duplicates.cfg 21:21-24
+
+## references @ 0:11  from the first "FOO" -> just the usage (declaration excluded)
+duplicates.cfg 21:21-24
+
+## references-decl @ 21:22  from the reference itself -> its own site plus both declarations
+duplicates.cfg 0:10-13
+duplicates.cfg 2:10-13
+duplicates.cfg 21:21-24
+
+## references @ 14:12  from the duplicate router "100" -> no usages -> <none>
+<none>

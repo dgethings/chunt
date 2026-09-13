@@ -1,0 +1,13 @@
+# Cursor marks for undefined_refs.cfg — definition/references on names that
+# are referenced but never defined (the fixture's whole point). Coordinates
+# are 0-indexed (LSP Position semantics) and match the .cfg byte offsets.
+#
+# Format:  <line>:<col> <feature> <optional free-form note>
+
+# definition marks -------------------------------------------------------
+1:18 definition     on undefined acl reference "ACL1" -> <none> (no target)
+2:22 definition     on undefined route-map reference "RM1" -> <none>
+
+# references marks -------------------------------------------------------
+1:18 references     on undefined acl reference "ACL1" -> its own site only
+9:15 references-decl  on undefined acl reference "ACL2"; no declaration exists to include
