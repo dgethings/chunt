@@ -163,7 +163,9 @@ func TestWire_UnknownMethod(t *testing.T) {
 
 	reqErr := s.callErr("textDocument/nonesuch", nil)
 	expectCode(t, "unknown method request", reqErr, jrpc2.MethodNotFound)
-	if data := fmt.Sprint(reqErr.Data); !strings.Contains(data, "textDocument/nonesuch") {
+	// reqErr.Data is a json.RawMessage (the JSON-encoded method name with
+	// quotes); string() renders the text, fmt.Sprint would render byte numbers.
+	if data := string(reqErr.Data); !strings.Contains(data, "textDocument/nonesuch") {
 		t.Errorf("unknown method error data = %q, want it to mention the method name", data)
 	}
 
@@ -181,6 +183,14 @@ func TestWire_UnknownMethod(t *testing.T) {
 	}
 }
 
+// terminalDirtyPush matches the terminal push for wireFixtureInitial: one
+// undefined-acl diagnostic (tier 2). Waiting for it by predicate instead of
+// a quiet window is required — tier-1 and tier-2 pushes are separated by
+// symbols.Index latency, unbounded under load (see AwaitDiagnosticsFunc).
+func terminalDirtyPush(p protocol.PublishDiagnosticsParams) bool {
+	return len(p.Diagnostics) == 1 && p.Diagnostics[0].Code == "undefined-acl"
+}
+
 // TestWire_DidOpenTwice locks in behavior for a didOpen on an already-open
 // document (LSP says clients must not do this; the server tolerates it).
 // The document store entry is replaced — content and version — and the
@@ -191,7 +201,15 @@ func TestWire_DidOpenTwice(t *testing.T) {
 	s := NewWireSession(t)
 	s.Initialize()
 
-	first := s.DidOpen(wireFixtureInitial)
+	s.Notify("textDocument/didOpen", protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{
+			URI:        wireURI,
+			LanguageID: "cisco_ios_jinja2",
+			Version:    1,
+			Text:       wireFixtureInitial,
+		},
+	})
+	first := s.AwaitDiagnosticsFunc(terminalDirtyPush, "terminal didOpen push (1 undefined-acl diagnostic)")
 	if len(first.Diagnostics) != 1 {
 		t.Fatalf("first didOpen: %d diagnostics, want 1 (undefined acl)", len(first.Diagnostics))
 	}
@@ -213,7 +231,11 @@ func TestWire_DidOpenTwice(t *testing.T) {
 
 	// The replacement really took: a follow-up didChange is applied on top
 	// of the second didOpen's content, not the first.
-	third := s.DidChangeFull(8, wireFixtureInitial)
+	s.Notify("textDocument/didChange", protocol.DidChangeTextDocumentParams{
+		TextDocument:   protocol.VersionedTextDocumentIdentifier{URI: wireURI, Version: 8},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{{Text: wireFixtureInitial}},
+	})
+	third := s.AwaitDiagnosticsFunc(terminalDirtyPush, "terminal didChange push (back to undefined acl)")
 	if len(third.Diagnostics) != 1 {
 		t.Errorf("didChange after re-open: %d diagnostics, want 1 (back to undefined acl): %+v",
 			len(third.Diagnostics), third.Diagnostics)
@@ -360,9 +382,20 @@ func newRawWire(t *testing.T) *rawWire {
 	})
 	jrpcSrv.Start(channel.Header("")(srvConn, srvConn))
 	t.Cleanup(func() {
+		// Same teardown ordering as NewWireSession: closing the transport
+		// terminates the server read loop on its own; Stop() would race its
+		// close(s.work) against a draining read loop (send on closed
+		// channel panic, reproduced under -race). Last-resort Stop only on
+		// timeout.
 		cliConn.Close()
-		jrpcSrv.Stop()
-		_ = jrpcSrv.Wait()
+		done := make(chan error, 1)
+		go func() { done <- jrpcSrv.Wait() }()
+		select {
+		case <-done:
+		case <-time.After(wireTimeout):
+			jrpcSrv.Stop()
+			<-done
+		}
 	})
 	return &rawWire{
 		t:    t,
