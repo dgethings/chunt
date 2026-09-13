@@ -76,9 +76,15 @@ route-map RM permit 10
 // wireSettle is how long the diagnostics stream must stay quiet before
 // AwaitSettledDiagnostics declares it stable. The feature publishes
 // diagnostics in two tiers (tree-only, then +refs; see
-// DESIGN-chunt-cfz-progressive-diagnostics.md), so one editor action can
-// push up to two notifications back-to-back.
-const wireSettle = 250 * time.Millisecond
+// DESIGN-chunt-cfz-progressive-diagnostics.md): tier 1 pushes immediately,
+// tier 2 only after symbols.Index — so the gap between the two pushes is
+// Index latency, which widens under load (250ms flaked on 2-vCPU CI
+// runners). Clean fixtures skip the tier-2 push entirely (nothing to add),
+// so their tier-1 push is terminal and this window only waits out push
+// delivery. Tests whose fixture HAS ref diagnostics must not rely on the
+// window — they use AwaitDiagnosticsFunc to wait for the terminal push
+// explicitly.
+const wireSettle = 750 * time.Millisecond
 
 // WireSession is an in-process chunt server plus a jrpc2 client connected
 // over an in-memory Content-Length-framed channel. It mirrors cmd/serve.go's
@@ -225,6 +231,30 @@ func (s *WireSession) Initialize() protocol.InitializeResult {
 	}, &res)
 	s.Notify("initialized", nil)
 	return res
+}
+
+// AwaitDiagnosticsFunc blocks until a publishDiagnostics push matching pred
+// arrives, failing the test on timeout instead of hanging. Use this to
+// wait for the TERMINAL diagnostics of an editor action on a fixture that
+// has ref diagnostics: tier-1 and tier-2 pushes are separated by
+// symbols.Index latency, which is unbounded under load, so no quiet-window
+// heuristic can separate "settled" from "tier 2 still computing". Pushes
+// for a URI are written in order by the handler goroutine, so the first
+// push matching the expected terminal content IS that terminal push.
+func (s *WireSession) AwaitDiagnosticsFunc(pred func(protocol.PublishDiagnosticsParams) bool, what string) protocol.PublishDiagnosticsParams {
+	s.t.Helper()
+	deadline := time.After(wireTimeout)
+	for {
+		select {
+		case p := <-s.diags:
+			if pred(p) {
+				return p
+			}
+		case <-deadline:
+			s.t.Fatalf("timed out after %v waiting for %s", wireTimeout, what)
+			return protocol.PublishDiagnosticsParams{}
+		}
+	}
 }
 
 // DidOpen opens text as wireURI with the cisco_ios_jinja2 language ID and
@@ -399,7 +429,22 @@ func TestWire_DiagnosticsLifecycle(t *testing.T) {
 	s := NewWireSession(t)
 	s.Initialize()
 
-	open := s.DidOpen(wireFixtureInitial)
+	// The fixture has an undefined ACL reference, so its terminal push is
+	// tier 2 — separated from the tier-1 push by symbols.Index latency,
+	// which is unbounded under load. Wait for the terminal content
+	// explicitly rather than relying on a quiet-window heuristic (see
+	// AwaitDiagnosticsFunc).
+	s.Notify("textDocument/didOpen", protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{
+			URI:        wireURI,
+			LanguageID: "cisco_ios_jinja2",
+			Version:    1,
+			Text:       wireFixtureInitial,
+		},
+	})
+	open := s.AwaitDiagnosticsFunc(func(p protocol.PublishDiagnosticsParams) bool {
+		return len(p.Diagnostics) == 1 && p.Diagnostics[0].Code == "undefined-acl"
+	}, `terminal didOpen push (1 undefined-acl diagnostic)`)
 	if open.URI != wireURI {
 		t.Errorf("push uri = %q, want %q", open.URI, wireURI)
 	}
