@@ -170,11 +170,11 @@ func TestTieredPublishing_Clean(t *testing.T) {
 
 // TestTieredPublishing_DidChange exercises the tiered contract on the
 // didChange path. The edit re-sends the SAME content (a no-op, e.g. a redundant
-// notify): the stored old tree is valid for identical content, so the
-// incremental parse is deterministic and equals a cold parse. A real content
-// change would trip chunt's pre-existing stale-incremental-parse limitation
-// (DidChange passes oldTree without a tree.Edit because the LSP DTO carries no
-// Range) — orthogonal to the tiered-publishing contract under test here.
+// notify): the stored old tree is valid for identical content, so the parse is
+// deterministic and equals a cold parse. (DidChange parses without the
+// old-tree hint — the LSP DTO carries no Range, and an unedited hint corrupted
+// node text on length changes; orthogonal to the tiered-publishing contract
+// under test here.)
 func TestTieredPublishing_DidChange(t *testing.T) {
 	// Config with BOTH a tree diagnostic (missing "}}") and a ref diagnostic
 	// (undefined acl) so both tiers are non-empty.

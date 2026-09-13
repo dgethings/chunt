@@ -28,15 +28,15 @@ import (
 // dominate, or is there meaningful post-parse pass time that progressive
 // publishing could surface to the user sooner?
 //
-// IMPORTANT CONTEXT for interpreting the numbers: DidChange (feature.go:86)
-// calls parser.Parse(content, oldTree) but NEVER calls tree.Edit() with change
-// ranges, because the LSP TextDocumentContentChangeEvent DTO carries only the
-// new Text (no Range) — see internal/protocol/diagnostics.go. Without an edit,
-// tree-sitter cannot reuse unchanged subtrees, so per-keystroke parse cost is
-// ~= a full re-parse. parse-cold below is therefore representative of BOTH the
-// didOpen path AND the per-keystroke didChange path. parse-incremental-no-edit
-// measures Parse(newContent, oldTree) after a 1-char edit to confirm the old
-// tree hint buys nothing without an edit.
+// IMPORTANT CONTEXT for interpreting the numbers: DidChange (feature.go)
+// parses with NO old-tree hint. The LSP TextDocumentContentChangeEvent DTO
+// carries only the new Text (no Range) — see internal/protocol/diagnostics.go
+// — so the old tree can never be tree.Edit-ed to match, and passing it
+// unedited made tree-sitter reuse stale byte ranges whenever the content
+// length changed, corrupting node text (fixed after the wire test caught
+// it). parse-incremental-no-edit below measures Parse(newContent, oldTree)
+// after a 1-char edit to confirm the unedited hint bought nothing: per-
+// keystroke parse cost ~= a full re-parse, which parse-cold represents.
 func TestPipelineTiming(t *testing.T) {
 	if os.Getenv("CHUNT_PERF") != "1" {
 		t.Skip("set CHUNT_PERF=1 to run the pipeline-timing measurement (chunt-cfz)")
@@ -127,7 +127,7 @@ func TestPipelineTiming(t *testing.T) {
 		// --- report ---
 		t.Logf("")
 		t.Logf("=== scale n=%d  (%d lines, %d bytes, %d diagnostics) ===", n, lines, len(content), diagCount)
-		t.Logf("  parse-cold               %12s   (didOpen, ~= per-keystroke: DidChange passes oldTree w/o tree.Edit)", parseCold)
+		t.Logf("  parse-cold               %12s   (didOpen and per-keystroke didChange: both full re-parse)", parseCold)
 		t.Logf("  parse-incremental(noEd)  %12s   (Parse(new, oldTree) no tree.Edit, 1-char edit)", parseIncrNoEdit)
 		t.Logf("  symbols.Index            %12s", idxTime)
 		t.Logf("  --- diagnostic passes (min of %d) ---", iters)

@@ -113,7 +113,15 @@ func (f *CiscoIOSFeature) DidOpen(ctx context.Context, doc *document.Document, p
 // diagnostics. See DidOpen for the tiered-publishing contract of `publish`.
 func (f *CiscoIOSFeature) DidChange(ctx context.Context, doc *document.Document, publish func([]protocol.Diagnostic)) ([]protocol.Diagnostic, error) {
 	oldTree := f.trees[doc.URI]
-	newTree := f.parser.Parse(doc.Content, oldTree)
+	// Parse without the old-tree hint: chunt does full-document sync, so the
+	// LSP DTO carries no edit ranges and the old tree can never be
+	// tree.Edit-ed to match the new content. Passing it unedited makes
+	// tree-sitter reuse stale byte ranges whenever the content length
+	// changes, corrupting node text (caught by the wire test as
+	// `undefined acl "FOO in\n"` after MISSING -> FOO). The perf harness
+	// (perf_pipeline_internal_test.go) measured the unedited hint as no
+	// faster than a cold parse, so nothing is lost.
+	newTree := f.parser.Parse(doc.Content, nil)
 	if oldTree != nil {
 		oldTree.Close()
 	}
