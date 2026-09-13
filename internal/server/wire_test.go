@@ -158,9 +158,22 @@ func NewWireSession(t *testing.T) *WireSession {
 	}
 	t.Cleanup(func() {
 		// Best-effort teardown for tests that did not Close explicitly.
+		// Closing the client side of the pipe makes the server's read loop
+		// see EOF and terminate on its own (ServerStatus.Closed), so Wait()
+		// returns without calling Stop(). Calling Stop() while the read loop
+		// is still draining races jrpc2 v1.3.5's close(s.work) against a
+		// final signal() — a "send on closed channel" panic (reproduced
+		// under -race). Stop() only as a timeout-bounded last resort for a
+		// server that somehow refuses to die.
 		client.Close()
-		jrpcSrv.Stop()
-		_ = jrpcSrv.Wait()
+		done := make(chan error, 1)
+		go func() { done <- jrpcSrv.Wait() }()
+		select {
+		case <-done:
+		case <-time.After(wireTimeout):
+			jrpcSrv.Stop()
+			<-done
+		}
 		cancel()
 	})
 	return s
