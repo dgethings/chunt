@@ -177,6 +177,160 @@ func TestHoverRichMarkdownHostname(t *testing.T) {
 	}
 }
 
+// TestHoverMultiWordCommand covers longest-prefix resolution for generic
+// command_line nodes: `ip address ...` must resolve to the multi-word DB key
+// "ip address", not the bare first token "ip" (chunt-92f). Hovering anywhere
+// on the command — leading token, mid-token, or over an argument — resolves
+// the same keyword.
+func TestHoverMultiWordCommand(t *testing.T) {
+	f := cisco_ios_jinja2.New()
+	defer f.Close()
+
+	//       line 0: !
+	//       line 1: interface GigabitEthernet0/0
+	//       line 2:  ip address 10.0.0.1 255.255.255.0
+	//       line 3: !
+	content := []byte("!\ninterface GigabitEthernet0/0\n ip address 10.0.0.1 255.255.255.0\n!\n")
+	doc := document.New("file:///test.cfg", "cisco_ios_jinja2", 1, content)
+	if _, err := f.DidOpen(context.Background(), doc, nil); err != nil {
+		t.Fatalf("DidOpen failed: %v", err)
+	}
+
+	want := "use the ip address command in interface configuration mode"
+	for _, pos := range []protocol.Position{
+		{Line: 2, Character: 1},  // on "ip"
+		{Line: 2, Character: 3},  // mid-token inside "ip"
+		{Line: 2, Character: 4},  // on "address"
+		{Line: 2, Character: 12}, // on the address argument
+	} {
+		result, err := f.Hover(context.Background(), doc, pos)
+		if err != nil {
+			t.Fatalf("Hover@%d:%d failed: %v", pos.Line, pos.Character, err)
+		}
+		if result == nil {
+			t.Errorf("Hover@%d:%d = nil, want ip address hover", pos.Line, pos.Character)
+			continue
+		}
+		if !strings.Contains(result.Contents.Value, want) {
+			t.Errorf("Hover@%d:%d missing %q; got prefix %q", pos.Line, pos.Character, want, truncForLog(result.Contents.Value, 120))
+		}
+	}
+}
+
+// TestHoverMultiWordHeader covers longest-prefix resolution for section
+// headers: `router bgp 65000` parses as a router_header whose first token is
+// "router"; the hover must resolve the multi-word key "router bgp".
+func TestHoverMultiWordHeader(t *testing.T) {
+	f := cisco_ios_jinja2.New()
+	defer f.Close()
+
+	content := []byte("!\nrouter bgp 65000\n neighbor 10.0.0.2 remote-as 65000\n!\n")
+	doc := document.New("file:///test.cfg", "cisco_ios_jinja2", 1, content)
+	if _, err := f.DidOpen(context.Background(), doc, nil); err != nil {
+		t.Fatalf("DidOpen failed: %v", err)
+	}
+
+	result, err := f.Hover(context.Background(), doc, protocol.Position{Line: 1, Character: 0})
+	if err != nil {
+		t.Fatalf("Hover failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected router bgp hover, got nil")
+	}
+	want := "To configure the Border Gateway Protocol (BGP) routing process"
+	if !strings.Contains(result.Contents.Value, want) {
+		t.Errorf("hover value missing %q; got prefix %q", want, truncForLog(result.Contents.Value, 120))
+	}
+}
+
+// TestHoverNegatedCommand verifies negated statements resolve their wrapped
+// command: `no ip address ...` hovers as "ip address", both when the cursor is
+// on the command and on the `no` token itself.
+func TestHoverNegatedCommand(t *testing.T) {
+	f := cisco_ios_jinja2.New()
+	defer f.Close()
+
+	//       line 0: interface GigabitEthernet0/0
+	//       line 1:  ip address 10.0.0.1 255.255.255.0
+	//       line 2:  no ip address 10.0.0.2 255.255.255.255
+	content := []byte("interface GigabitEthernet0/0\n ip address 10.0.0.1 255.255.255.0\n no ip address 10.0.0.2 255.255.255.255\n")
+	doc := document.New("file:///test.cfg", "cisco_ios_jinja2", 1, content)
+	if _, err := f.DidOpen(context.Background(), doc, nil); err != nil {
+		t.Fatalf("DidOpen failed: %v", err)
+	}
+
+	want := "use the ip address command in interface configuration mode"
+	for _, pos := range []protocol.Position{
+		{Line: 2, Character: 4}, // on "ip" of the negated command
+		{Line: 2, Character: 1}, // on the "no" token itself
+	} {
+		result, err := f.Hover(context.Background(), doc, pos)
+		if err != nil {
+			t.Fatalf("Hover@%d:%d failed: %v", pos.Line, pos.Character, err)
+		}
+		if result == nil {
+			t.Errorf("Hover@%d:%d = nil, want ip address hover", pos.Line, pos.Character)
+			continue
+		}
+		if !strings.Contains(result.Contents.Value, want) {
+			t.Errorf("Hover@%d:%d missing %q; got prefix %q", pos.Line, pos.Character, want, truncForLog(result.Contents.Value, 120))
+		}
+	}
+}
+
+// TestHoverStatementMultiWordKeyword verifies a dedicated *_statement whose
+// tokens include the full multi-word key resolves to it (match ip address).
+func TestHoverStatementMultiWordKeyword(t *testing.T) {
+	f := cisco_ios_jinja2.New()
+	defer f.Close()
+
+	content := []byte("!\nroute-map RM permit 10\n match ip address ACL\n!\n")
+	doc := document.New("file:///test.cfg", "cisco_ios_jinja2", 1, content)
+	if _, err := f.DidOpen(context.Background(), doc, nil); err != nil {
+		t.Fatalf("DidOpen failed: %v", err)
+	}
+
+	result, err := f.Hover(context.Background(), doc, protocol.Position{Line: 2, Character: 1})
+	if err != nil {
+		t.Fatalf("Hover failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected match ip address hover, got nil")
+	}
+	want := "To distribute any routes"
+	if !strings.Contains(result.Contents.Value, want) {
+		t.Errorf("hover value missing %q; got prefix %q", want, truncForLog(result.Contents.Value, 120))
+	}
+}
+
+// TestHoverUnknownCommandStillNull: commands whose keywords are not in the
+// DB (description, transport input) must stay null — resolution must not
+// fabricate a match from argument tokens.
+func TestHoverUnknownCommandStillNull(t *testing.T) {
+	f := cisco_ios_jinja2.New()
+	defer f.Close()
+
+	content := []byte("!\ninterface GigabitEthernet0/0\n description uplink\n!\nline vty 0 4\n transport input ssh\n!\n")
+	doc := document.New("file:///test.cfg", "cisco_ios_jinja2", 1, content)
+	if _, err := f.DidOpen(context.Background(), doc, nil); err != nil {
+		t.Fatalf("DidOpen failed: %v", err)
+	}
+
+	for _, pos := range []protocol.Position{
+		{Line: 2, Character: 1}, // description (not in DB)
+		{Line: 4, Character: 0}, // line vty header (not in DB)
+		{Line: 5, Character: 1}, // transport input (not in DB)
+	} {
+		result, err := f.Hover(context.Background(), doc, pos)
+		if err != nil {
+			t.Fatalf("Hover@%d:%d failed: %v", pos.Line, pos.Character, err)
+		}
+		if result != nil && result.Contents.Value != "" {
+			t.Errorf("Hover@%d:%d = %q, want nil/empty (keyword not in DB)", pos.Line, pos.Character, truncForLog(result.Contents.Value, 80))
+		}
+	}
+}
+
 // truncForLog returns the first n bytes of s (or all of it if shorter), for
 // readable test-failure output without dumping a multi-thousand-char docstring.
 func truncForLog(s string, n int) string {

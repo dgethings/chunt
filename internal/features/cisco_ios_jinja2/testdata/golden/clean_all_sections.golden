@@ -23,7 +23,13 @@ This command does not have a no form except for Cisco ASR 901 Series Aggregation
 … [truncated, 15228 bytes total]
 
 ## hover @ 13:0  'router' token -> nil (exercises the no-hover path)
-<none>
+kind=markdown
+To configure the Border Gateway Protocol (BGP) routing process, use the router bgp command in global configuration mode. To remove a BGP routing process, use the no form of this command.
+
+**Usage Guidelines**
+
+This command allows you to set up a distributed routing core that automatically guarantees the loop-free exchange of routing information between autonomous systems. Prior to January 2009, BGP autonomous system numbers that were allocated to companies were 2-octet numbers in the range from 1 to 65535 as described in RFC 4271, A Border Gateway Protocol 4 (BGP-4) . Due to increased demand for autonomous system numbers, the Internet Assigned Number Authority (IANA) will start in January 2009 to allocate four-octet autonomous system numbers in the range from 65536 to 4294967295. RFC 5396,
+… [truncated, 11306 bytes total]
 
 ## completion @ 47:1  config-if scope (inside the interface body)
 2620 items  sha256:e3b3c1ec25d1c4da

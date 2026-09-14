@@ -8,6 +8,7 @@ import (
 	"github.com/dgethings/chunt/internal/document"
 	"github.com/dgethings/chunt/internal/keyword"
 	"github.com/dgethings/chunt/internal/protocol"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 func (f *CiscoIOSFeature) Hover(ctx context.Context, doc *document.Document, pos protocol.Position) (*protocol.HoverResult, error) {
@@ -19,25 +20,18 @@ func (f *CiscoIOSFeature) Hover(ctx context.Context, doc *document.Document, pos
 	if node == nil {
 		return nil, nil
 	}
-	name := node.Kind()
-	if name == "identifier" {
-		name = string(doc.Content[node.StartByte():node.EndByte()])
+	// Resolve the cursor hit to the command it belongs to, then to the
+	// command's keyword-DB name. The name probe is longest-prefix over the
+	// command's leading word tokens (see resolveHoverKeyword), so multi-word
+	// commands ("ip address", "router bgp") resolve like diagnostics does —
+	// a bare first-token lookup returns null for them (chunt-92f).
+	cmd := commandNodeForHover(node)
+	if cmd == nil {
+		return nil, nil
 	}
-	// When the cursor sits exactly at the end of a keyword token,
-	// FindNodeAtPosition resolves to the enclosing *_statement / *_header
-	// node rather than the anonymous keyword leaf. Recover the keyword text
-	// from its first anonymous leaf child so the lookup still matches.
-	if strings.HasSuffix(name, "_statement") || strings.HasSuffix(name, "_header") {
-		for i := uint(0); i < node.ChildCount(); i++ {
-			child := node.Child(i)
-			if child == nil {
-				continue
-			}
-			if !child.IsNamed() && child.ChildCount() == 0 {
-				name = string(doc.Content[child.StartByte():child.EndByte()])
-				break
-			}
-		}
+	name := f.resolveHoverKeyword(cmd, doc.Content)
+	if name == "" {
+		return nil, nil
 	}
 	kw, ok := f.keyword.Lookup(name)
 	if !ok {
@@ -46,6 +40,71 @@ func (f *CiscoIOSFeature) Hover(ctx context.Context, doc *document.Document, pos
 	return &protocol.HoverResult{
 		Contents: buildHoverContent(kw),
 	}, nil
+}
+
+// commandNodeForHover walks up from the node under the cursor to the
+// innermost command-like node (command_line, or a *_statement / *_header
+// rule). A negated_statement is a wrapper around its `keyword` field, so it
+// descends into the negated command instead of stopping at the wrapper —
+	// `no ip address ...` hovers as `ip address ...`. Returns nil when the
+// cursor is not inside a command (e.g. a comment or banner text).
+func commandNodeForHover(n *sitter.Node) *sitter.Node {
+	for cur := n; cur != nil; cur = cur.Parent() {
+		if cur.Kind() == "negated_statement" {
+			inner := ast.ChildByFieldName(cur, "keyword")
+			if inner == nil {
+				return nil
+			}
+			return commandNodeForHover(inner)
+		}
+		kind := cur.Kind()
+		if kind == "command_line" || strings.HasSuffix(kind, "_statement") || strings.HasSuffix(kind, "_header") {
+			return cur
+		}
+	}
+	return nil
+}
+
+// resolveHoverKeyword returns the keyword-DB name for a command-like node.
+// It collects the node's leading word tokens (up to maxHoverPrefixTokens,
+// single-line tokens only — Jinja2 tags' leading "{%" therefore never forms a
+// matchable prefix) and probes them longest-first against the keyword DB,
+// mirroring the wrong-section pass's firstKeywordFromNode. This resolves
+// multi-word commands ("ip address" from `ip address 10.0.0.1 ...`, "router
+// bgp" from a router_header) whose bare first token is not a DB key. Entries
+// containing "(" are documentation aliases ("aaa accounting (IKEv2 profile)")
+// and never match. Falls back to the bare first token, like diagnostics.
+func (f *CiscoIOSFeature) resolveHoverKeyword(n *sitter.Node, content []byte) string {
+	if n == nil || n.ChildCount() == 0 {
+		return ""
+	}
+	startRow := n.StartPosition().Row
+	const maxHoverPrefixTokens = 4
+	var tokens []string
+	for i := uint(0); i < n.ChildCount() && len(tokens) < maxHoverPrefixTokens; i++ {
+		c := n.Child(i)
+		if c == nil {
+			continue
+		}
+		if c.StartPosition().Row != startRow {
+			break
+		}
+		text := string(content[c.StartByte():c.EndByte()])
+		if strings.ContainsAny(text, " \t\n\r") {
+			break
+		}
+		tokens = append(tokens, text)
+	}
+	if len(tokens) == 0 {
+		return ""
+	}
+	for i := len(tokens); i >= 1; i-- {
+		candidate := strings.Join(tokens[:i], " ")
+		if entry, ok := f.keyword.Lookup(candidate); ok && !strings.Contains(entry.Keyword, "(") {
+			return candidate
+		}
+	}
+	return tokens[0]
 }
 
 // buildHoverContent composes the hover MarkupContent for a keyword. When the
