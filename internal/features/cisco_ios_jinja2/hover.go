@@ -46,7 +46,7 @@ func (f *CiscoIOSFeature) Hover(ctx context.Context, doc *document.Document, pos
 // innermost command-like node (command_line, or a *_statement / *_header
 // rule). A negated_statement is a wrapper around its `keyword` field, so it
 // descends into the negated command instead of stopping at the wrapper —
-	// `no ip address ...` hovers as `ip address ...`. Returns nil when the
+// `no ip address ...` hovers as `ip address ...`. Returns nil when the
 // cursor is not inside a command (e.g. a comment or banner text).
 func commandNodeForHover(n *sitter.Node) *sitter.Node {
 	for cur := n; cur != nil; cur = cur.Parent() {
