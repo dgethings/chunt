@@ -26,7 +26,7 @@ WORKSPACE := go.work
 
 SRCS := $(wildcard main.go cmd/*.go) $(shell find internal -name '*.go')
 
-VERSION := $(shell svu current 2>/dev/null || echo "0.0.0")
+VERSION := $(shell svu current 2>/dev/null || echo "dev")
 NEXT    := $(shell svu next)
 # RELEASE_TAG is the version we build and publish. For a normal release it
 # equals NEXT. When NEXT == VERSION and the VERSION tag already exists, a
@@ -54,13 +54,17 @@ export GITHUB_TOKEN
 # ---------------------------------------------------------------------------
 # Build & test — self-contained: the grammar is a published module (go.mod)
 # ---------------------------------------------------------------------------
+# Stamp the current git tag (svu) into the binary, same as goreleaser does at
+# release time, so local builds report a real version instead of "dev".
+LDFLAGS := -s -w -X main.version=$(VERSION)
+
 all: $(BIN)
 
 $(BIN): $(SRCS)
-	CGO_ENABLED=1 go build -o $(BIN) .
+	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o $(BIN) .
 
 lsp:
-	CGO_ENABLED=1 go build -o $(BIN) .
+	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o $(BIN) .
 
 test: test-lsp
 
