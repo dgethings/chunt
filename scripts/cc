@@ -1,7 +1,13 @@
 #!/bin/bash
+# Cross-compiler router for goreleaser CGO builds. goreleaser exports
+# GOOS/GOARCH per build target; route each to a compiler that can produce
+# it from the release machine (macOS): zig for linux (musl) and windows
+# (mingw-w64), clang for darwin (native).
 case "${GOOS}-${GOARCH}" in
-  linux-amd64)  exec zig cc -target x86_64-linux-musl "$@" ;;
-  linux-arm64)  exec zig cc -target aarch64-linux-musl "$@" ;;
+  linux-amd64)   exec zig cc -target x86_64-linux-musl "$@" ;;
+  linux-arm64)   exec zig cc -target aarch64-linux-musl "$@" ;;
+  windows-amd64) exec zig cc -target x86_64-windows-gnu "$@" ;;
+  windows-arm64) exec zig cc -target aarch64-windows-gnu "$@" ;;
   darwin-*)      exec clang "$@" ;;
   *)             exec cc "$@" ;;
 esac

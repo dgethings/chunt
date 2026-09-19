@@ -107,7 +107,7 @@ Remove `go.work` (or `make clean-workspace`) to revert to the published module.
 
 ### Binary
 
-Pre-built binaries are published on the [releases page](https://github.com/dgethings/chunt/releases) for darwin/linux on amd64 and arm64.
+Pre-built binaries are published on the [releases page](https://github.com/dgethings/chunt/releases) for darwin, linux, and windows on amd64 and arm64 (linux and windows cross-compiled with zig; windows binaries are plain `.exe` console executables).
 
 ---
 
