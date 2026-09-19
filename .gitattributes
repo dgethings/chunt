@@ -1,0 +1,7 @@
+# Byte-exact checkout for golden-test fixtures. The golden harness reads
+# .cfg/.marks/.golden files as raw bytes and compares parse positions, so a
+# CRLF checkout (git's core.autocrlf default on Windows) shifts tree-sitter
+# error ranges and fails every comparison. Force LF everywhere.
+*.cfg text eol=lf
+*.marks text eol=lf
+*.golden text eol=lf
