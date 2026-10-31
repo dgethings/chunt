@@ -15,5 +15,9 @@ func (s *Server) Definition(ctx context.Context, params protocol.DefinitionParam
 	if err != nil {
 		return nil, err
 	}
-	return f.Definition(ctx, doc, params.Position)
+	locs, err := f.Definition(ctx, doc, s.internalPosition(doc, params.Position))
+	if err != nil {
+		return nil, err
+	}
+	return s.wireLocations(doc, locs), nil
 }

@@ -19,7 +19,7 @@ func (s *Server) Completion(ctx context.Context, params protocol.CompletionParam
 		l.Debug("failed to find supported language", "error", err.Error())
 		return protocol.CompletionList{}, err
 	}
-	items, err := f.Completion(ctx, doc, params.Position)
+	items, err := f.Completion(ctx, doc, s.internalPosition(doc, params.Position))
 	if err != nil {
 		slog.Debug("failed to get completion items", "error", err.Error())
 		return protocol.CompletionList{}, err

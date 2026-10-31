@@ -25,7 +25,7 @@ func (s *Server) DidOpen(ctx context.Context, params protocol.DidOpenTextDocumen
 		return nil
 	}
 	_, err = f.DidOpen(ctx, doc, func(diags []protocol.Diagnostic) {
-		publishDiagnostics(ctx, doc.URI, diags)
+		publishDiagnostics(ctx, doc.URI, s.wireDiagnostics(doc, diags))
 	})
 	if err != nil {
 		l.Error("didOpen error", "error", err.Error())
@@ -55,7 +55,7 @@ func (s *Server) DidChange(ctx context.Context, params protocol.DidChangeTextDoc
 		}
 
 		_, err = f.DidChange(ctx, doc, func(diags []protocol.Diagnostic) {
-			publishDiagnostics(ctx, doc.URI, diags)
+			publishDiagnostics(ctx, doc.URI, s.wireDiagnostics(doc, diags))
 		})
 		if err != nil {
 			l.Error("failed to get diagnostics", "language", doc.LanguageID, "error", err)

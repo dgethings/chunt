@@ -6,6 +6,7 @@ import (
 
 	"github.com/dgethings/chunt/internal/document"
 	"github.com/dgethings/chunt/internal/features"
+	"github.com/dgethings/chunt/internal/protocol"
 )
 
 type serverState int
@@ -20,6 +21,17 @@ type Server struct {
 	documents *document.Store
 	features  *features.Router
 
+	// posEncoding is the wire encoding negotiated at initialize time. It
+	// is written once during Initialize and read by every request handler,
+	// so a dedicated lock (rather than reusing stateMu) keeps the race
+	// detector happy without coupling the two lifecycle aspects. It lives
+	// on the Server (not per-feature) because the feature layer is
+	// encoding-agnostic: it speaks UTF-8 byte columns (tree-sitter
+	// Point.Column) and the server converts at the dispatch edge. See
+	// encoding.go.
+	posEncodingMu sync.RWMutex
+	posEncoding   string
+
 	stateMu sync.Mutex
 	state   serverState
 	version string
@@ -33,7 +45,10 @@ func New(version string) *Server {
 	s := &Server{
 		documents: document.NewStore(),
 		features:  features.NewRouter(),
-		version:   version,
+		// LSP default for handshakes that do not negotiate encodings;
+		// Initialize overwrites it with the negotiated choice.
+		posEncoding: protocol.PositionEncodingUTF16,
+		version:     version,
 	}
 	return s
 }

@@ -17,5 +17,9 @@ func (s *Server) DocumentSymbol(ctx context.Context, params protocol.DocumentSym
 	if err != nil {
 		return nil, err
 	}
-	return f.DocumentSymbol(ctx, doc)
+	syms, err := f.DocumentSymbol(ctx, doc)
+	if err != nil {
+		return nil, err
+	}
+	return s.wireDocumentSymbols(doc, syms), nil
 }

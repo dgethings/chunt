@@ -16,5 +16,9 @@ func (s *Server) References(ctx context.Context, params protocol.ReferenceParams
 	if err != nil {
 		return nil, err
 	}
-	return f.References(ctx, doc, params.Position, params.Context.IncludeDeclaration)
+	refs, err := f.References(ctx, doc, s.internalPosition(doc, params.Position), params.Context.IncludeDeclaration)
+	if err != nil {
+		return nil, err
+	}
+	return s.wireLocations(doc, refs), nil
 }

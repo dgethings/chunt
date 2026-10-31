@@ -10,7 +10,8 @@ import (
 )
 
 type InitializeParams struct {
-	ClientInfo *protocol.ClientInfo `json:"clientInfo"`
+	ClientInfo *protocol.ClientInfo                `json:"clientInfo"`
+	General    *protocol.GeneralClientCapabilities `json:"general,omitempty"`
 }
 
 func (s *Server) Initialize(ctx context.Context, params InitializeParams) (protocol.InitializeResult, error) {
@@ -18,9 +19,19 @@ func (s *Server) Initialize(ctx context.Context, params InitializeParams) (proto
 	if params.ClientInfo != nil {
 		slog.Info("connected to client", "name", params.ClientInfo.Name, "version", params.ClientInfo.Version)
 	}
+	// LSP 3.17 position-encoding negotiation (encoding.go). VS Code's
+	// client offers only utf-16 and aborts the connection at
+	// doInitialize if the server advertises anything else, so this must
+	// be a negotiated value, never a hardcoded one.
+	enc := negotiatePositionEncoding(nil)
+	if params.General != nil {
+		enc = negotiatePositionEncoding(params.General.PositionEncodings)
+	}
+	s.setPositionEncoding(enc)
+	slog.Debug("negotiated position encoding", "encoding", enc)
 	return protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
-			PositionEncoding:       "utf-8",
+			PositionEncoding:       enc,
 			TextDocumentSync:       1,
 			HoverProvider:          true,
 			DefinitionProvider:     true,

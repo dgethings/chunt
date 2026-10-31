@@ -15,5 +15,5 @@ func (s *Server) Hover(ctx context.Context, params protocol.HoverParams) (*proto
 	if err != nil {
 		return nil, err
 	}
-	return f.Hover(ctx, doc, params.Position)
+	return f.Hover(ctx, doc, s.internalPosition(doc, params.Position))
 }

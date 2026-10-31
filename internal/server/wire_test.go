@@ -246,6 +246,57 @@ func (s *WireSession) Initialize() protocol.InitializeResult {
 	return res
 }
 
+// InitializeWithEncodings performs the initialize handshake offering a
+// general.positionEncodings list (the LSP 3.17 negotiation parameter), then
+// notifies initialized. Encodings the real editors offer are pinned by
+// TestWire_Initialize_Negotiations.
+func (s *WireSession) InitializeWithEncodings(offered ...string) protocol.InitializeResult {
+	s.t.Helper()
+	var res protocol.InitializeResult
+	s.Call("initialize", map[string]any{
+		"clientInfo": map[string]any{"name": "wire-test-client", "version": "0.0"},
+		"general":    map[string]any{"positionEncodings": offered},
+	}, &res)
+	s.Notify("initialized", nil)
+	return res
+}
+
+// TestWire_Initialize_Negotiations pins the LSP 3.17 position-encoding
+// selection across the offers real editors make. VS Code's bundled client
+// offers exactly ["utf-16"] and aborts the connection at doInitialize
+// ("Unsupported position encoding ... received from server") if the server
+// answers with anything else, so the server must never advertise a value
+// outside the client's list — including arbitrarily, not depending on the
+// encoding it prefers internally.
+func TestWire_Initialize_Negotiations(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		what  string
+		given []string
+		want  string
+	}{
+		{"no offer: LSP default", nil, "utf-16"},
+		{"VS Code client offer", []string{"utf-16"}, "utf-16"},
+		{"utf-8-capable client: first offer wins", []string{"utf-8", "utf-16"}, "utf-8"},
+		{"utf-8 after utf-16", []string{"utf-16", "utf-8"}, "utf-16"},
+		{"only unknown kinds: LSP default", []string{"utf-32", "latin-1"}, "utf-16"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.what, func(t *testing.T) {
+			var want protocol.InitializeResult
+			s := NewWireSession(t)
+			if tc.given == nil {
+				want = s.Initialize()
+			} else {
+				want = s.InitializeWithEncodings(tc.given...)
+			}
+			if got := want.Capabilities.PositionEncoding; got != tc.want {
+				t.Errorf("negotiated positionEncoding = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // AwaitDiagnosticsFunc blocks until a publishDiagnostics push matching pred
 // arrives, failing the test on timeout instead of hanging. Use this to
 // wait for the TERMINAL diagnostics of an editor action on a fixture that
@@ -391,8 +442,11 @@ func TestWire_Initialize(t *testing.T) {
 	if caps.TextDocumentSync != 1 {
 		t.Errorf("capabilities.textDocumentSync = %d, want 1 (full)", caps.TextDocumentSync)
 	}
-	if caps.PositionEncoding != "utf-8" {
-		t.Errorf("capabilities.positionEncoding = %q, want %q", caps.PositionEncoding, "utf-8")
+	// Initialize() sends clientInfo only — no general.positionEncodings —
+	// so the negotiated encoding must be the LSP default. Entries that DO
+	// offer encodings are pinned by TestWire_Initialize_Negotiations.
+	if caps.PositionEncoding != "utf-16" {
+		t.Errorf("capabilities.positionEncoding = %q, want %q (LSP default for a non-negotiating client)", caps.PositionEncoding, "utf-16")
 	}
 }
 
