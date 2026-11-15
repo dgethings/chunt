@@ -1,0 +1,8 @@
+# golden for invalid_mask.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/invalid_mask$' -update
+
+## diagnostics
+ERROR    invalid-mask           1:21-27 | expected a subnet mask (e.g. 255.255.255.0), got "wibble"
+ERROR    invalid-mask           2:21-32 | expected a subnet mask (e.g. 255.255.255.0), got "255.0.255.0"
+ERROR    invalid-mask           6:18-24 | expected a subnet mask (e.g. 255.255.255.0), got "wibble"
+ERROR    invalid-mask           7:26-32 | expected a subnet mask (e.g. 255.255.255.0), got "wibble"

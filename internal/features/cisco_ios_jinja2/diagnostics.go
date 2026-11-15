@@ -36,6 +36,7 @@ import (
 //       - command version   (SeverityHint)  — diagnostics_version.go
 //       - wrong section     (SeverityHint)  — diagnostics_section.go
 //       - protocol mismatch (SeverityError) — diagnostics_protocol.go
+//       - argument value    (SeverityError) — diagnostics_args.go
 //     The tree is now traversed once per didChange instead of 4 times.
 //
 // symbol-dependent (tier 2):
@@ -111,6 +112,7 @@ func (f *CiscoIOSFeature) collectTreeDiags(doc *document.Document, tree *sitter.
 			if kind != "negated_statement" && (kind == "command_line" || strings.HasSuffix(kind, "_statement")) {
 				f.appendWrongSection(&diags, n, content)
 				f.appendProtocolMismatch(&diags, n, content)
+				f.appendInvalidArgument(&diags, n, content)
 				if runVer != "" {
 					f.appendCommandVersion(&diags, n, content, runVer)
 				}

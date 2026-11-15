@@ -21,12 +21,13 @@ Powered by a dedicated [tree-sitter-cisco-ios-jinja2](https://github.com/dgethin
 
 ### Diagnostics
 
-Four families of diagnostics, all anchored precisely on the offending token:
+Five families of diagnostics, all anchored precisely on the offending token:
 
 1. **Syntax / parse** (Error / Warning) — tree-sitter `ERROR` nodes (tokens that could not be incorporated into any rule, e.g. an unterminated `{% if %}`) are reported as errors quoting the offending snippet; `MISSING` tokens are reported naming what is missing. A section missing its terminating `!` is downgraded to a Warning anchored on the section header.
 2. **Version mismatch** (Error) — when the `! version X` comment emitted by `show run` disagrees with the configured `version Y` statement.
 3. **Undefined reference** (Warning) — when a command names a target that has no definition in the same file.
 4. **Duplicate definition** (Warning) — when the same `(kind, name)` is defined twice; the diagnostic carries `relatedInformation` back to the first definition.
+5. **Argument value** (Error) — when an argument the keyword database types as a subnet mask holds something that is not one (e.g. `ip address 10.0.0.1 wibble` → `expected a subnet mask (e.g. 255.255.255.0), got "wibble"`). Driven by the keyword-DB snippet placeholders (`${N:mask}`), so every command family in the database is covered; Jinja-templated values (`{{ ... }}`) are skipped.
 
 Example:
 
@@ -253,6 +254,7 @@ chunt/
 │   │       ├── diagnostics_version.go  # version mismatch rule
 │   │       ├── diagnostics_refs.go     # undefined refs + duplicates
 │   │       ├── diagnostics_section.go  # wrong-section hint
+│   │       ├── diagnostics_args.go    # snippet-driven argument values (invalid-mask)
 │   │       └── keywords.go             # ~6k IOS command DB
 │   ├── keyword/                  # Keyword type + Lookup / InSection
 │   ├── protocol/                 # hand-rolled LSP JSON-RPC DTOs
