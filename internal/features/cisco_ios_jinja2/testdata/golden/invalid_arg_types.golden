@@ -1,0 +1,12 @@
+# golden for invalid_arg_types.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/invalid_arg_types$' -update
+
+## diagnostics
+ERROR    invalid-ip-address     1:12-18 | expected an IPv4 address (e.g. 10.0.0.1), got "wibble"
+ERROR    invalid-ipv6-address   2:29-35 | expected an IPv6 address (e.g. 2001:db8::1), got "wibble"
+ERROR    invalid-vlan-id        3:21-27 | expected a VLAN ID (1-4094), got "wibble"
+ERROR    invalid-vlan-id        13:22-28 | expected a VLAN ID (1-4094), got "wibble"
+ERROR    invalid-ipv6-prefix    15:16-22 | expected an IPv6 prefix (e.g. 2001:db8::/32), got "wibble"
+ERROR    invalid-ip-address     16:9-15 | expected an IPv4 address (e.g. 10.0.0.1), got "wibble"
+ERROR    invalid-ip-address     19:29-35 | expected an IPv4 address (e.g. 10.0.0.1), got "wibble"
+ERROR    invalid-as-number      21:30-36 | expected an AS number (e.g. 65001 or 1.1), got "wibble"

@@ -27,7 +27,7 @@ Five families of diagnostics, all anchored precisely on the offending token:
 2. **Version mismatch** (Error) — when the `! version X` comment emitted by `show run` disagrees with the configured `version Y` statement.
 3. **Undefined reference** (Warning) — when a command names a target that has no definition in the same file.
 4. **Duplicate definition** (Warning) — when the same `(kind, name)` is defined twice; the diagnostic carries `relatedInformation` back to the first definition.
-5. **Argument value** (Error) — when an argument the keyword database types as a subnet mask holds something that is not one (e.g. `ip address 10.0.0.1 wibble` → `expected a subnet mask (e.g. 255.255.255.0), got "wibble"`). Driven by the keyword-DB snippet placeholders (`${N:mask}`), so every command family in the database is covered; Jinja-templated values (`{{ ... }}`) are skipped.
+5. **Argument value** (Error) — when an argument the keyword database types as a specific value kind holds something that is not one: subnet masks (`ip address 10.0.0.1 wibble` → `expected a subnet mask (e.g. 255.255.255.0), got "wibble"`), wildcard masks, IPv6 addresses and prefixes, MAC addresses, AS numbers, VLAN IDs, durations (`seconds`/`milliseconds`/`minutes`), and curated IPv4 slots (`ip address`, `ip route`'s prefix, `ip nat outside source static`'s addresses). Driven by the keyword-DB snippet placeholders (`${N:mask}`, `${N:vlan-id}`, …) — two registries: unambiguous names globally, ambiguous names like `ip-address` only on curated address-only commands (IOS accepts hostnames in several address slots). Jinja-templated values (`{{ ... }}`) and optional-`[...]`-slot bindings are skipped; see `diagnostics_args.go`.
 
 Example:
 
