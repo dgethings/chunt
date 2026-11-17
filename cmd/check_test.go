@@ -146,3 +146,61 @@ func TestNewGrammarLogEmittedAtDebug(t *testing.T) {
 		t.Errorf("grammar log not emitted at debug level:\n%s", buf.String())
 	}
 }
+
+// TestCheckDirectory checks every *.ios.j2 in a directory as ONE logical
+// device config: cross-file findings are reported with their anchoring
+// file's path, and "No issues found." when the merged config is clean.
+func TestCheckDirectory(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"a-base.ios.j2": "hostname r1\nrouter bgp 65001\n router-id 1.1.1.1\n!\n",
+		"b-bgp.ios.j2":  "router bgp 65001\n router-id 2.2.2.2\n!\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	var stdout bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetArgs([]string{"--log-level=info", "check", dir})
+	defer resetRoot(t)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("check dir: %v", err)
+	}
+	out := stdout.String()
+	wantLine := filepath.Join(dir, "b-bgp.ios.j2") + ":2:2: router-id \"2.2.2.2\" replaces \"1.1.1.1\"; only the last definition takes effect"
+	if !strings.Contains(out, wantLine) {
+		t.Errorf("missing cross-file conflict line %q in:\n%s", wantLine, out)
+	}
+}
+
+// TestCheckCleanDirectory: a directory of templates forming a consistent
+// config is clean (sections split across files are allowed).
+func TestCheckCleanDirectory(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"a-base.ios.j2": "hostname r1\n",
+		"b-ospf.ios.j2": "router ospf 1\n router-id 1.1.1.1\n network 10.0.0.0 0.0.0.255 area 0\n!\n",
+		"c-bgp.ios.j2":  "router bgp 65001\n router-id 2.2.2.2\n neighbor 10.0.0.2 remote-as 65002\n!\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	var stdout bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetArgs([]string{"--log-level=info", "check", dir})
+	defer resetRoot(t)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("check dir: %v", err)
+	}
+	if got := stdout.String(); got != "No issues found.\n" {
+		t.Errorf("clean directory output = %q, want %q", got, "No issues found.\n")
+	}
+}

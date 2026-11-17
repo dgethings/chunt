@@ -134,8 +134,16 @@ func TestRepeatedCommandDiagnostics(t *testing.T) {
 					t.Fatalf("want at least 1 %s diagnostic, got %d: %+v", tc.wantCode, len(hits), diags)
 				}
 				for _, d := range hits {
-					if d.Severity != protocol.SeverityWarning {
-						t.Errorf("severity: got %d, want Warning (2)", d.Severity)
+					// redefined-setting is an Error (the merged config will not
+					// behave as the earlier definition intended, in-file or cross-
+					// file); duplicate-command stays a Warning (working config,
+					// smelly practice).
+					wantSev := protocol.SeverityWarning
+					if tc.wantCode == "redefined-setting" {
+						wantSev = protocol.SeverityError
+					}
+					if d.Severity != wantSev {
+						t.Errorf("severity: got %d, want %d", d.Severity, wantSev)
 					}
 					if d.Source != "chunt" {
 						t.Errorf("source: got %q, want \"chunt\"", d.Source)

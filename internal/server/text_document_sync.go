@@ -24,9 +24,14 @@ func (s *Server) DidOpen(ctx context.Context, params protocol.DidOpenTextDocumen
 		l.Error("failed to find supported language", "error", err.Error())
 		return nil
 	}
-	_, err = f.DidOpen(ctx, doc, func(diags []protocol.Diagnostic) {
-		publishDiagnostics(ctx, doc.URI, s.wireDiagnostics(doc, diags))
-	})
+	// Publish callback handed to the feature: carries the document each
+	// diagnostic set belongs to, so multi-file features can republish
+	// sibling documents (directory-as-one-config mode) and the server can
+	// position-convert against the right content.
+	publish := func(d *document.Document, diags []protocol.Diagnostic) {
+		publishDiagnostics(ctx, d.URI, s.wireDiagnostics(d, diags))
+	}
+	_, err = f.DidOpen(ctx, doc, publish)
 	if err != nil {
 		l.Error("didOpen error", "error", err.Error())
 	}
@@ -54,9 +59,10 @@ func (s *Server) DidChange(ctx context.Context, params protocol.DidChangeTextDoc
 			continue
 		}
 
-		_, err = f.DidChange(ctx, doc, func(diags []protocol.Diagnostic) {
-			publishDiagnostics(ctx, doc.URI, s.wireDiagnostics(doc, diags))
-		})
+		publish := func(d *document.Document, diags []protocol.Diagnostic) {
+			publishDiagnostics(ctx, d.URI, s.wireDiagnostics(d, diags))
+		}
+		_, err = f.DidChange(ctx, doc, publish)
 		if err != nil {
 			l.Error("failed to get diagnostics", "language", doc.LanguageID, "error", err)
 			continue
@@ -79,7 +85,9 @@ func (s *Server) DidClose(ctx context.Context, params protocol.DidCloseTextDocum
 		l.Error("failed to find supported language", "error", err.Error())
 		return nil
 	}
-	if err := f.DidClose(ctx, doc); err != nil {
+	if err := f.DidClose(ctx, doc, func(d *document.Document, diags []protocol.Diagnostic) {
+		publishDiagnostics(ctx, d.URI, s.wireDiagnostics(d, diags))
+	}); err != nil {
 		l.Error("failed execution", "error", err.Error())
 	}
 	s.documents.Delete(params.TextDocument.URI)

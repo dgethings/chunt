@@ -109,7 +109,7 @@ func TestPipelineTiming(t *testing.T) {
 			// syntax + command-version + wrong-section + protocol-mismatch.
 			{"tree-collector", func() int { return len(f.collectTreeDiags(doc, tree)) }},
 			{"version-mismatch", func() int { return len(f.runVersionMismatchDiagnostics(doc, tree)) }},
-			{"undefined-refs", func() int { return len(f.runUndefinedReferenceDiagnostics(doc)) }},
+			{"undefined-refs", func() int { return len(f.runUndefinedReferenceDiagnostics(doc, nil)) }},
 			{"duplicate-defs", func() int { return len(f.runDuplicateDefinitionDiagnostics(doc)) }},
 		}
 		passTotals := map[string]time.Duration{}
@@ -167,7 +167,7 @@ func TestTieredLatency(t *testing.T) {
 			start := time.Now()
 			var tier1At time.Duration
 			seenTier1 := false
-			_, err := f.DidOpen(context.Background(), doc, func(diags []protocol.Diagnostic) {
+			_, err := f.DidOpen(context.Background(), doc, func(d *document.Document, diags []protocol.Diagnostic) {
 				if !seenTier1 {
 					tier1At = time.Since(start)
 					tier1Count = len(diags)

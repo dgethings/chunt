@@ -25,10 +25,10 @@ Six families of diagnostics, all anchored precisely on the offending token:
 
 1. **Syntax / parse** (Error / Warning) — tree-sitter `ERROR` nodes (tokens that could not be incorporated into any rule, e.g. an unterminated `{% if %}`) are reported as errors quoting the offending snippet; `MISSING` tokens are reported naming what is missing. A section missing its terminating `!` is downgraded to a Warning anchored on the section header.
 2. **Version mismatch** (Error) — when the `! version X` comment emitted by `show run` disagrees with the configured `version Y` statement.
-3. **Undefined reference** (Warning) — when a command names a target that has no definition in the same file.
+3. **Undefined reference** (Warning) — when a command names a target that has no definition anywhere in the file's directory group (see [Multi-file templates](#multi-file-templates-directory--one-device-config)).
 4. **Duplicate definition** (Warning) — when the same `(kind, name)` is defined twice; the diagnostic carries `relatedInformation` back to the first definition.
 5. **Argument value** (Error) — when an argument the keyword database types as a specific value kind holds something that is not one: subnet masks (`ip address 10.0.0.1 wibble` → `expected a subnet mask (e.g. 255.255.255.0), got "wibble"`), wildcard masks, IPv6 addresses and prefixes, MAC addresses, AS numbers, VLAN IDs, durations (`seconds`/`milliseconds`/`minutes`), and curated IPv4 slots (`ip address`, `ip route`'s prefix, `ip nat outside source static`'s addresses). Driven by the keyword-DB snippet placeholders (`${N:mask}`, `${N:vlan-id}`, …) — two registries: unambiguous names globally, ambiguous names like `ip-address` only on curated address-only commands (IOS accepts hostnames in several address slots). Jinja-templated values (`{{ ... }}`) and optional-`[...]`-slot bindings are skipped; see `diagnostics_args.go`.
-6. **Repeated / redefined commands** (Warning) — valid-but-smelly practice: an identical command appearing twice in one section (`duplicate-command`, e.g. a copy-pasted static route) and scalar redefinitions where the last definition wins (`redefined-setting`: `hostname r1` then `hostname r2`, or multiple primary `ip address` lines on one interface — `secondary` lines are additive and exempt). Negations clear the tracked state, so remove-then-re-add is fine; commands inside Jinja blocks are out of scope. Both carry `relatedInformation` back to the first definition; see `diagnostics_repeated.go`.
+6. **Repeated / redefined commands** (Warning / Error) — duplicate or conflicting practice: an identical command appearing twice in one logical section (`duplicate-command` Warning, e.g. a copy-pasted static route) and scalar redefinitions where the last definition wins (`redefined-setting` **Error**: `hostname r1` then `hostname r2`, multiple primary `ip address` lines on one interface, or conflicting `router-id` values in a routing process — `secondary` lines are additive and exempt). Negations clear the tracked state, so remove-then-re-add is fine; commands inside Jinja blocks are out of scope. Both carry `relatedInformation` back to the first definition — across files when running in directory mode — and a cross-file conflict additionally marks the first definition with a companion `superseded-setting` Warning naming the replacing value and its file; see `diagnostics_repeated.go`.
 
 Example:
 
@@ -43,6 +43,42 @@ site-a.ios.j2:20:1:  [chunt] running version and configured version mismatch
 ```
 
 Same diagnostics show up as red/yellow squiggles in any LSP-aware editor.
+
+### Multi-file templates (directory = one device config)
+
+A network device's configuration is commonly split across several template
+files — base config, routing, ACLs. chunt treats every `*.ios.j2` file in the
+**same directory** as ONE logical device config (one device type per
+directory):
+
+- **Sections may be split across files.** `router ospf` in one file and
+  `router bgp` in another are simply distinct sections; the same section
+  identity (e.g. `router bgp 65001`) appearing in several files merges
+  silently into one logical section.
+- **Conflicting definitions are still errors.** Two different `router-id`
+  values under the same logical `router bgp` section — even in different
+  files — is a `redefined-setting` Error anchored on the later definition
+  (merge order = sorted filename), with a jump back to the first. The
+  FIRST definition's file also gets a companion `superseded-setting`
+  Warning anchored on it (naming the replacing value and the file it moved
+  to), so both files show their participation in the conflict. Identical
+  duplicated lines across files are `duplicate-command` Warnings.
+- **References resolve across the whole group.** `ip access-group MGMT in`
+  in one file is satisfied by `ip access-list ... MGMT` in another.
+
+Discovery is server-side and editor-agnostic: opening or editing any file
+rescans its directory (one `stat` per sibling; changed files re-read by
+mtime). Files open in the editor stay authoritative; closed siblings are
+re-read from disk; diagnostics are published for background files too, so
+cross-file findings show in the editor's Problems panel without opening
+those files. When the last file in a directory closes, the group is torn
+  down and its published diagnostics cleared.
+
+Known v1 limitations: no subdirectory recursion (a device is ONE directory),
+section identity is literal header text (`interface {{ name }}` merges only
+with identical template text), and cross-file conflicts anchor the Error on
+the later definition (the first gets the companion Warning described
+above).
 
 ### Entities tracked
 
@@ -160,11 +196,17 @@ language-servers = [ "chunt" ]
 
 `chunt` has three subcommands:
 
-```
+```text
 chunt serve                  # run as an LSP server over stdio (the default mode for editors)
-chunt check <file>           # one-off diagnostic run; prints in compiler-output format
+chunt check <file|directory> # one-off diagnostic run; prints in compiler-output format
 chunt version                # print the version
 ```
+
+`chunt check` on a single file loads its directory siblings as read-only
+context (cross-file rules apply; diagnostics anchored in the checked file
+are printed). On a directory it checks every `*.ios.j2` inside
+(non-recursive) as one logical device config and prints every file's
+anchored diagnostics.
 
 Global flag:
 

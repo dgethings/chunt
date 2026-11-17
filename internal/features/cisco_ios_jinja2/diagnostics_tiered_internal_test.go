@@ -28,9 +28,9 @@ func diagSet(ds []protocol.Diagnostic) map[string]struct{} {
 
 // capturePublish returns a publish callback that snapshots every tier it
 // receives (copied, so later caller mutation cannot rewrite a captured tier).
-func capturePublish() (func([]protocol.Diagnostic), *[][]protocol.Diagnostic) {
+func capturePublish() (publishFn, *[][]protocol.Diagnostic) {
 	var tiers [][]protocol.Diagnostic
-	cb := func(ds []protocol.Diagnostic) {
+	cb := func(d *document.Document, ds []protocol.Diagnostic) {
 		cp := make([]protocol.Diagnostic, len(ds))
 		copy(cp, ds)
 		tiers = append(tiers, cp)

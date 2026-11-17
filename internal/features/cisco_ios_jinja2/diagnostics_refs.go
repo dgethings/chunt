@@ -9,11 +9,16 @@ import (
 )
 
 // runUndefinedReferenceDiagnostics emits a Warning for every reference whose
-// expected (Kind, Name) is not satisfied by any definition in the same
-// document. This is the core Phase 4 deliverable: it catches the typos and
-// missing definitions the parser itself cannot flag (because the flat
-// command_line form is syntactically valid regardless of whether the named
-// target exists).
+// expected (Kind, Name) is not satisfied by any definition in scope. This is
+// the core Phase 4 deliverable: it catches the typos and missing definitions
+// the parser itself cannot flag (because the flat command_line form is
+// syntactically valid regardless of whether the named target exists).
+//
+// defScope lists the URIs searched for satisfying definitions: nil (or
+// [doc.URI]) is the historical single-document scope; a directory group's
+// order resolves references across the whole logical config, so an ACL
+// defined in a sibling template satisfies an `ip access-group` reference in
+// this one (workspace mode).
 //
 // Examples:
 //
@@ -29,17 +34,27 @@ import (
 //
 // Built-in names that never have an explicit definition (class-default,
 // any, all) are suppressed to avoid false positives.
-func (f *CiscoIOSFeature) runUndefinedReferenceDiagnostics(doc *document.Document) []protocol.Diagnostic {
+func (f *CiscoIOSFeature) runUndefinedReferenceDiagnostics(doc *document.Document, defScope []string) []protocol.Diagnostic {
 	refs := f.symbols.ReferencesAll(doc.URI)
 	if len(refs) == 0 {
 		return nil
+	}
+	if len(defScope) == 0 {
+		defScope = []string{doc.URI}
 	}
 	var diags []protocol.Diagnostic
 	for _, r := range refs {
 		if isBuiltInName(r.Kind, r.Name) {
 			continue
 		}
-		if defs := f.symbols.Lookup(doc.URI, r.Kind, r.Name); len(defs) > 0 {
+		satisfied := false
+		for _, u := range defScope {
+			if defs := f.symbols.Lookup(u, r.Kind, r.Name); len(defs) > 0 {
+				satisfied = true
+				break
+			}
+		}
+		if satisfied {
 			continue
 		}
 		diags = append(diags, protocol.Diagnostic{

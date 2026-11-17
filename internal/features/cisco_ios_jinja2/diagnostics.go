@@ -137,9 +137,13 @@ func (f *CiscoIOSFeature) collectTreeDiags(doc *document.Document, tree *sitter.
 
 // runRefDiagnostics runs the passes that depend on the symbol table
 // (undefined-refs, duplicate-defs). symbols.Index must have run first.
-func (f *CiscoIOSFeature) runRefDiagnostics(doc *document.Document) []protocol.Diagnostic {
+// defScope lists the URIs whose definitions satisfy a reference: nil (or
+// [doc.URI]) keeps the historical single-document scope; a directory
+// group's order resolves references across the whole logical config
+// (workspace mode).
+func (f *CiscoIOSFeature) runRefDiagnostics(doc *document.Document, defScope []string) []protocol.Diagnostic {
 	diags := make([]protocol.Diagnostic, 0)
-	diags = append(diags, f.runUndefinedReferenceDiagnostics(doc)...)
+	diags = append(diags, f.runUndefinedReferenceDiagnostics(doc, defScope)...)
 	diags = append(diags, f.runDuplicateDefinitionDiagnostics(doc)...)
 	return diags
 }
@@ -152,6 +156,6 @@ func (f *CiscoIOSFeature) runRefDiagnostics(doc *document.Document) []protocol.D
 // search by code). Kept as a convenience for one-shot callers (perf harness).
 func (f *CiscoIOSFeature) runDiagnostics(doc *document.Document, tree *sitter.Tree) []protocol.Diagnostic {
 	diags := f.runTreeDiagnostics(doc, tree)
-	diags = append(diags, f.runRefDiagnostics(doc)...)
+	diags = append(diags, f.runRefDiagnostics(doc, nil)...)
 	return diags
 }
