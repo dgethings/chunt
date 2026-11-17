@@ -21,13 +21,14 @@ Powered by a dedicated [tree-sitter-cisco-ios-jinja2](https://github.com/dgethin
 
 ### Diagnostics
 
-Five families of diagnostics, all anchored precisely on the offending token:
+Six families of diagnostics, all anchored precisely on the offending token:
 
 1. **Syntax / parse** (Error / Warning) — tree-sitter `ERROR` nodes (tokens that could not be incorporated into any rule, e.g. an unterminated `{% if %}`) are reported as errors quoting the offending snippet; `MISSING` tokens are reported naming what is missing. A section missing its terminating `!` is downgraded to a Warning anchored on the section header.
 2. **Version mismatch** (Error) — when the `! version X` comment emitted by `show run` disagrees with the configured `version Y` statement.
 3. **Undefined reference** (Warning) — when a command names a target that has no definition in the same file.
 4. **Duplicate definition** (Warning) — when the same `(kind, name)` is defined twice; the diagnostic carries `relatedInformation` back to the first definition.
 5. **Argument value** (Error) — when an argument the keyword database types as a specific value kind holds something that is not one: subnet masks (`ip address 10.0.0.1 wibble` → `expected a subnet mask (e.g. 255.255.255.0), got "wibble"`), wildcard masks, IPv6 addresses and prefixes, MAC addresses, AS numbers, VLAN IDs, durations (`seconds`/`milliseconds`/`minutes`), and curated IPv4 slots (`ip address`, `ip route`'s prefix, `ip nat outside source static`'s addresses). Driven by the keyword-DB snippet placeholders (`${N:mask}`, `${N:vlan-id}`, …) — two registries: unambiguous names globally, ambiguous names like `ip-address` only on curated address-only commands (IOS accepts hostnames in several address slots). Jinja-templated values (`{{ ... }}`) and optional-`[...]`-slot bindings are skipped; see `diagnostics_args.go`.
+6. **Repeated / redefined commands** (Warning) — valid-but-smelly practice: an identical command appearing twice in one section (`duplicate-command`, e.g. a copy-pasted static route) and scalar redefinitions where the last definition wins (`redefined-setting`: `hostname r1` then `hostname r2`, or multiple primary `ip address` lines on one interface — `secondary` lines are additive and exempt). Negations clear the tracked state, so remove-then-re-add is fine; commands inside Jinja blocks are out of scope. Both carry `relatedInformation` back to the first definition; see `diagnostics_repeated.go`.
 
 Example:
 
@@ -255,6 +256,7 @@ chunt/
 │   │       ├── diagnostics_refs.go     # undefined refs + duplicates
 │   │       ├── diagnostics_section.go  # wrong-section hint
 │   │       ├── diagnostics_args.go    # snippet-driven argument values (invalid-mask)
+│   │       ├── diagnostics_repeated.go # duplicate-command + redefined-setting warnings
 │   │       └── keywords.go             # ~6k IOS command DB
 │   ├── keyword/                  # Keyword type + Lookup / InSection
 │   ├── protocol/                 # hand-rolled LSP JSON-RPC DTOs

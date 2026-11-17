@@ -38,6 +38,11 @@ import (
 //       - protocol mismatch (SeverityError) — diagnostics_protocol.go
 //       - argument value    (SeverityError) — diagnostics_args.go
 //     The tree is now traversed once per didChange instead of 4 times.
+//  E. repeated commands    (SeverityWarning) — diagnostics_repeated.go
+//     Owns its own pass (scope-aggregated, not per-node): scans the root
+//     config plus every section for duplicate command text (duplicate-command)
+//     and curated scalar redefinitions (redefined-setting: hostname value
+//     replacement, multiple primary ip address on one interface).
 //
 // symbol-dependent (tier 2):
 //  C. undefined refs      (SeverityWarning) — diagnostics_refs.go
@@ -49,6 +54,7 @@ func (f *CiscoIOSFeature) runTreeDiagnostics(doc *document.Document, tree *sitte
 	diags := make([]protocol.Diagnostic, 0)
 	diags = append(diags, f.runVersionMismatchDiagnostics(doc, tree)...)
 	diags = append(diags, f.collectTreeDiags(doc, tree)...)
+	diags = append(diags, f.runRepeatedCommandDiagnostics(doc, tree)...)
 	return diags
 }
 

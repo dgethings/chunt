@@ -1,0 +1,8 @@
+# golden for repeated_commands.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/repeated_commands$' -update
+
+## diagnostics
+WARNING  redefined-setting      1:0-11 | hostname "r2" replaces "r1"; only the last definition takes effect  ~> repeated_commands.cfg 0:0-11 "first defined here"
+WARNING  redefined-setting      5:1-34 | multiple primary "ip address" definitions on this interface; this replaces "10.0.0.1 255.255.255.0"  ~> repeated_commands.cfg 4:1-34 "first defined here"
+WARNING  duplicate-command      13:1-32 | duplicate command "neighbor 10.0.0.2 remote-as 200"; already defined earlier in this section  ~> repeated_commands.cfg 12:1-32 "first defined here"
+WARNING  duplicate-command      16:0-36 | duplicate command "ip route 10.0.0.0 255.0.0.0 10.0.0.2"; already defined earlier in this section  ~> repeated_commands.cfg 15:0-36 "first defined here"
