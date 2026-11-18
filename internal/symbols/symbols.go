@@ -728,8 +728,10 @@ func nodeRange(n *sitter.Node) protocol.Range {
 // definition. Leading is the prefix token sequence (starting with the
 // command's first token, including any prec-2 keyword such as `match`,
 // `class`, `access-class`, plus subsequent fixed tokens like `ip address`).
-// ArgIndex is the 0-based offset of the referenced name within the trailing
-// args that follow the Leading prefix.
+// A `"*"` element matches any single arg token — used for `neighbor <ip>
+// prefix-list NAME` where the IP is variable (chunt-otg.10). ArgIndex is the
+// 0-based offset of the referenced name within the trailing args that follow
+// the Leading prefix.
 //
 // Examples:
 //
@@ -739,10 +741,20 @@ func nodeRange(n *sitter.Node) protocol.Range {
 //	    (`service-policy` parses as service_statement(args=["-policy", dir, NAME])
 //	    because `service` is a prec-2 keyword that splits the hyphenated literal)
 //	{["class"], 0, KindClassMap}                    -> class NAME (inside policy-map body)
+//	{["neighbor", "*", "prefix-list"], 0, KindPrefixList} -> neighbor 1.1.1.1 prefix-list NAME in
+//
+// When several refSpecs match one command line, the LONGEST Leading wins
+// (longest-match-wins): `match ip address prefix-list PL1` must satisfy the
+// 4-token prefix-list spec, not shadow into the 3-token ACL spec with a
+// reference literally named "prefix-list".
 type refSpec struct {
 	Leading  []string
 	ArgIndex int
 	Kind     Kind
+	// Varargs: every arg from ArgIndex onward is a referenced name
+	// (`match ip address prefix-list PL1 PL2` cites two lists). Trailing
+	// direction keywords (in|out) are skipped.
+	Varargs bool
 }
 
 var refSpecs = []refSpec{
@@ -753,6 +765,13 @@ var refSpecs = []refSpec{
 	{Leading: []string{"service", "-policy"}, ArgIndex: 1, Kind: KindPolicyMap},
 	{Leading: []string{"class"}, ArgIndex: 0, Kind: KindClassMap},
 	{Leading: []string{"switchport", "access", "vlan"}, ArgIndex: 0, Kind: KindVlan},
+
+	// Prefix-list references (chunt-otg.10).
+	{Leading: []string{"match", "ip", "address", "prefix-list"}, ArgIndex: 0, Kind: KindPrefixList, Varargs: true},
+	{Leading: []string{"match", "ipv6", "address", "prefix-list"}, ArgIndex: 0, Kind: KindPrefixList, Varargs: true},
+	{Leading: []string{"neighbor", "*", "prefix-list"}, ArgIndex: 0, Kind: KindPrefixList},
+	{Leading: []string{"distribute-list", "prefix"}, ArgIndex: 0, Kind: KindPrefixList},
+	{Leading: []string{"distribute-list", "prefix-list"}, ArgIndex: 0, Kind: KindPrefixList},
 }
 
 // refSectionSpec describes a hierarchical section node whose header names a
@@ -812,28 +831,54 @@ func ExtractReferences(uri string, root *sitter.Node, content []byte) []Referenc
 			return true
 		}
 		fullSeq := append([]string{leading}, args...)
-		for _, spec := range refSpecs {
-			if !prefixMatch(fullSeq, spec.Leading) {
-				continue
+		// Longest-match-wins: emit references for the single best-matching
+		// spec only, so a more specific pattern shadows the shorter prefix
+		// that would otherwise misread a keyword arg as a name.
+		best := -1
+		for i, spec := range refSpecs {
+			if prefixMatchWild(fullSeq, spec.Leading) && (best < 0 || len(refSpecs[i].Leading) > len(refSpecs[best].Leading)) {
+				best = i
 			}
-			// argNodes parallels fullSeq[1:] (leading is Child(0); args are
-			// the rest). Index into argNodes by (len(Leading)-1 + ArgIndex).
-			idx := len(spec.Leading) - 1 + spec.ArgIndex
-			if idx >= len(argNodes) {
-				continue
-			}
-			nameNode := argNodes[idx]
-			ref := Reference{
-				Kind:  spec.Kind,
-				Name:  textOf(nameNode, content),
-				URI:   uri,
-				Range: nodeRange(nameNode),
-			}
-			finishReference(&ref, n)
-			refs = append(refs, ref)
+		}
+		if best >= 0 {
+			refs = appendSpecReferences(refs, refSpecs[best], argNodes, n, uri, content)
 		}
 		return true
 	})
+	return refs
+}
+
+// appendSpecReferences emits the reference(s) for one matched refSpec: the
+// single arg at (len(Leading)-1 + ArgIndex), or — for Varargs specs — every
+// arg from that index onward, skipping trailing direction keywords (in|out).
+// Each emitted reference gets the chunt-otg.21 Jinja pass applied.
+func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Node, n *sitter.Node, uri string, content []byte) []Reference {
+	// argNodes parallels fullSeq[1:] (leading is Child(0); args are the
+	// rest). Index into argNodes by (len(Leading)-1 + ArgIndex).
+	idx := len(spec.Leading) - 1 + spec.ArgIndex
+	if idx >= len(argNodes) {
+		return refs
+	}
+	emit := func(nameNode *sitter.Node) []Reference {
+		ref := Reference{
+			Kind:  spec.Kind,
+			Name:  textOf(nameNode, content),
+			URI:   uri,
+			Range: nodeRange(nameNode),
+		}
+		finishReference(&ref, n)
+		return append(refs, ref)
+	}
+	if !spec.Varargs {
+		return emit(argNodes[idx])
+	}
+	for _, nameNode := range argNodes[idx:] {
+		t := textOf(nameNode, content)
+		if t == "in" || t == "out" {
+			continue
+		}
+		refs = emit(nameNode)
+	}
 	return refs
 }
 
@@ -924,11 +969,17 @@ func leadingAndArgs(n *sitter.Node, content []byte) (string, []string, []*sitter
 
 // prefixMatch reports whether a begins with every element of b in order.
 func prefixMatch(a, b []string) bool {
+	return prefixMatchWild(a, b)
+}
+
+// prefixMatchWild is prefixMatch with wildcard support: a "*" element of b
+// matches any single element of a (chunt-otg.10).
+func prefixMatchWild(a, b []string) bool {
 	if len(a) < len(b) {
 		return false
 	}
 	for i := range b {
-		if a[i] != b[i] {
+		if b[i] != "*" && a[i] != b[i] {
 			return false
 		}
 	}
