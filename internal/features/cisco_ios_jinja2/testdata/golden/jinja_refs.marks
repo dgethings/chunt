@@ -1,0 +1,12 @@
+# Cursor marks for jinja_refs.cfg — the Jinja false-positive gate fixture
+# (chunt-otg.21). Coordinates are 0-indexed (LSP Position semantics).
+#
+# Format:  <line>:<col> <feature> <optional free-form note>
+
+# definition marks -------------------------------------------------------
+6:18 definition     on computed acl reference "{{ acl_name }}" -> resolves to the computed definition via normalized comparison (rule 4)
+37:15 definition    on literal acl reference "TYPO_ACL" inside a guard -> <none> (genuine miss; gate only suppresses computed names)
+
+# references marks -------------------------------------------------------
+6:18 references     on computed acl reference "{{ acl_name }}" -> the computed definition site (normalized match)
+13:25 references-decl on the guarded acl definition "EDGE-IN" -> its declaration only (no literal usages exist)

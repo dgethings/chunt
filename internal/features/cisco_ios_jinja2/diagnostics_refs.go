@@ -33,7 +33,15 @@ import (
 // not produce a diagnostic.
 //
 // Built-in names that never have an explicit definition (class-default,
-// any, all) are suppressed to avoid false positives.
+// any, all) are suppressed to avoid false positives. Names containing a
+// Jinja expression ({{ ... }}) are unresolvable statically and likewise
+// never produce a diagnostic — see the chunt-otg.21 rules at the top of
+// internal/symbols (HasJinjaExpression) and the duplicate pass below.
+// References whose name is a Jinja expression (`ip access-group {{ acl }}
+// in`) are unresolvable statically (chunt-otg.21 rule 1) and never produce
+// a diagnostic. Guarded definitions ({% if %}/{% for %} bodies) are indexed
+// like any other and satisfy references from any branch (rule 2), so no
+// extra handling is needed here — Lookup already finds them.
 func (f *CiscoIOSFeature) runUndefinedReferenceDiagnostics(doc *document.Document, defScope []string) []protocol.Diagnostic {
 	refs := f.symbols.ReferencesAll(doc.URI)
 	if len(refs) == 0 {
@@ -46,6 +54,9 @@ func (f *CiscoIOSFeature) runUndefinedReferenceDiagnostics(doc *document.Documen
 	for _, r := range refs {
 		if isBuiltInName(r.Kind, r.Name) {
 			continue
+		}
+		if symbols.HasJinjaExpression(r.Name) {
+			continue // computed name: unresolvable statically, rule 1
 		}
 		satisfied := false
 		for _, u := range defScope {
@@ -93,6 +104,14 @@ func (f *CiscoIOSFeature) runDuplicateDefinitionDiagnostics(doc *document.Docume
 	var diags []protocol.Diagnostic
 	for i, s := range syms {
 		if isSingletonKind(s.Kind) {
+			continue
+		}
+		// Jinja false-positive gate (chunt-otg.21): definitions guarded by
+		// {% if %}/{% else %} branches may legitimately repeat a name (the
+		// branches are mutually exclusive at render time), and computed
+		// names (`{% for %}`-emitted `vlan {{ vlan_id }}`) cannot be proven
+		// distinct or identical statically. Neither is flagged.
+		if s.Guarded || symbols.HasJinjaExpression(s.Name) {
 			continue
 		}
 		key := string(s.Kind) + "\x00" + s.Name

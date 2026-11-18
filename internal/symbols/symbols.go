@@ -7,6 +7,7 @@ package symbols
 import (
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/dgethings/chunt/internal/protocol"
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -37,6 +38,13 @@ type Symbol struct {
 	URI       string
 	Range     protocol.Range // full section / line range
 	NameRange protocol.Range // just the name token (Definition / highlight)
+	// Guarded reports whether the definition sits inside a Jinja block that
+	// renders conditionally or repeatedly ({% if %}/{% elif %}/{% else %}/
+	// {% for %}). Guarded definitions satisfy references from any branch
+	// (chunt-otg.21 rule 2) and are exempt from duplicate-definition
+	// warnings, because mutually exclusive branches legitimately repeat a
+	// definition and static analysis cannot prove which branches render.
+	Guarded bool
 }
 
 // Reference is a use of a Symbol's name somewhere in the document. The Kind
@@ -48,6 +56,8 @@ type Reference struct {
 	Name  string
 	URI   string
 	Range protocol.Range
+	// Guarded mirrors Symbol.Guarded for references inside Jinja blocks.
+	Guarded bool
 }
 
 // docIndex holds the symbols and references extracted from a single
@@ -292,6 +302,7 @@ func Extract(uri string, root *sitter.Node, content []byte) []Symbol {
 	var out []Symbol
 	walkNamed(root, func(n *sitter.Node) bool {
 		if sym, ok := extractSection(uri, n, content); ok {
+			finishSymbol(&sym, n)
 			out = append(out, sym)
 			// Section bodies do not themselves contain nested section
 			// definitions in IOS, but descending is harmless; keep going
@@ -302,6 +313,7 @@ func Extract(uri string, root *sitter.Node, content []byte) []Symbol {
 	})
 	walkNamed(root, func(n *sitter.Node) bool {
 		if sym, ok := extractFlat(uri, n, content); ok {
+			finishSymbol(&sym, n)
 			out = append(out, sym)
 		}
 		return true
@@ -687,6 +699,7 @@ func ExtractReferences(uri string, root *sitter.Node, content []byte) []Referenc
 		// policy_map_class_section). These are not command-like, so handle them
 		// before the command-line path below; keep descending either way.
 		if r, ok := extractSectionReference(uri, n, content); ok {
+			finishReference(&r, n)
 			refs = append(refs, r)
 		}
 		if !isCommandLike(n) {
@@ -714,12 +727,14 @@ func ExtractReferences(uri string, root *sitter.Node, content []byte) []Referenc
 				continue
 			}
 			nameNode := argNodes[idx]
-			refs = append(refs, Reference{
+			ref := Reference{
 				Kind:  spec.Kind,
 				Name:  textOf(nameNode, content),
 				URI:   uri,
 				Range: nodeRange(nameNode),
-			})
+			}
+			finishReference(&ref, n)
+			refs = append(refs, ref)
 		}
 		return true
 	})
@@ -822,4 +837,101 @@ func prefixMatch(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// ---------------------------------------------------------------------------
+// Jinja-aware definition/reference resolution (chunt-otg.21)
+// ---------------------------------------------------------------------------
+//
+// Real .ios.j2 templates compute object names at render time (`ip access-group
+// {{ acl_name }} in`) and guard definitions with `{% if %}` branches. Static
+// analysis cannot resolve computed names and cannot prove which branches
+// render, so the diagnostics passes must gate on four rules:
+//
+//  1. A name containing a Jinja expression/statement tag is UNRESOLVABLE —
+//     never emit undefined-* for it (HasJinjaExpression).
+//  2. Definitions guarded by {% if %} still satisfy references from any
+//     branch; the symbol table already indexes them, and the Guarded flag
+//     lets the duplicate-definition pass skip them (mutually exclusive
+//     branches legitimately repeat a definition).
+//  3. {% for %}-generated definitions (name built from the loop variable)
+//     register as definitions — extraction already descends into Jinja
+//     blocks; the computed name is normalized for consistent comparison.
+//  4. Whitespace-control and whitespace inside a name token are stripped
+//     before comparison so `{{ name }}`, `{{name}}`, and `{{- name -}}`
+//     compare equal (NormalizeJinjaName).
+
+// jinjaGuardKinds are the AST node kinds that wrap conditionally or
+// repeatedly rendered config: Jinja block statements from the grammar's
+// template layer.
+var jinjaGuardKinds = map[string]bool{
+	"if_statement":       true, // {% if ... %}
+	"elif_statement":     true, // {% elif ... %}
+	"else_statement":     true, // {% else %}
+	"for_statement":      true, // {% for ... %}
+	"for_else_statement": true, // {% for %}...{% else %}
+}
+
+// HasJinjaExpression reports whether name contains a Jinja expression or
+// statement tag ("{{ ... }}" or "{% ... %}"), i.e. the name is computed at
+// render time and cannot be resolved statically. Such references must never
+// produce undefined-* diagnostics (rule 1), and computed definition names
+// must be compared only in normalized form (rule 4).
+func HasJinjaExpression(name string) bool {
+	return strings.Contains(name, "{{") || strings.Contains(name, "{%")
+}
+
+// NormalizeJinjaName canonicalizes a name token for comparison. Literal
+// names pass through unchanged (Jinja templates are case-sensitive on
+// literals, and IOS object names are too). Computed names (rule 4) have all
+// whitespace removed and whitespace-control markers (`{{-`, `-}}`) trimmed,
+// so `{{ vlan_id }}`, `{{vlan_id}}`, and `{{- vlan_id -}}` compare equal.
+func NormalizeJinjaName(name string) string {
+	if !HasJinjaExpression(name) {
+		return name
+	}
+	var b strings.Builder
+	b.Grow(len(name))
+	for _, r := range name {
+		if !unicode.IsSpace(r) {
+			b.WriteRune(r)
+		}
+	}
+	s := b.String()
+	// Trim whitespace-control markers without eating the braces.
+	if strings.HasPrefix(s, "{{-") {
+		s = "{{" + s[3:]
+	}
+	if strings.HasSuffix(s, "-}}") {
+		s = s[:len(s)-3] + "}}"
+	}
+	return s
+}
+
+// isJinjaGuarded reports whether n sits inside a Jinja block that renders
+// conditionally or repeatedly ({% if %}/{% elif %}/{% else %}/{% for %}),
+// mirroring isNegated's ancestor walk.
+func isJinjaGuarded(n *sitter.Node) bool {
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		if jinjaGuardKinds[p.Kind()] {
+			return true
+		}
+	}
+	return false
+}
+
+// finishSymbol applies the Jinja-awareness pass (chunt-otg.21) to an
+// extracted symbol: Guarded ancestry and normalized computed names. Literal
+// names are returned unchanged by NormalizeJinjaName.
+func finishSymbol(sym *Symbol, n *sitter.Node) {
+	sym.Name = NormalizeJinjaName(sym.Name)
+	sym.Guarded = isJinjaGuarded(n)
+}
+
+// finishReference applies the Jinja-awareness pass (chunt-otg.21) to an
+// extracted reference: Guarded ancestry and normalized computed names.
+// Literal names are returned unchanged by NormalizeJinjaName.
+func finishReference(ref *Reference, n *sitter.Node) {
+	ref.Name = NormalizeJinjaName(ref.Name)
+	ref.Guarded = isJinjaGuarded(n)
 }

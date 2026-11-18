@@ -1,0 +1,18 @@
+# golden for jinja_refs.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/jinja_refs$' -update
+
+## diagnostics
+WARNING  undefined-acl          36:14-18 | undefined acl "TYPO"
+
+## definition @ 6:18  on computed acl reference "{{ acl_name }}" -> resolves to the computed definition via normalized comparison (rule 4)
+jinja_refs.cfg 29:24-40
+
+## definition @ 37:15  on literal acl reference "TYPO_ACL" inside a guard -> <none> (genuine miss; gate only suppresses computed names)
+<none>
+
+## references @ 6:18  on computed acl reference "{{ acl_name }}" -> the computed definition site (normalized match)
+jinja_refs.cfg 6:17-31
+
+## references-decl @ 13:25  on the guarded acl definition "EDGE-IN" -> its declaration only (no literal usages exist)
+jinja_refs.cfg 13:24-31
+jinja_refs.cfg 17:24-31
