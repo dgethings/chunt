@@ -103,7 +103,7 @@ func (f *CiscoIOSFeature) runDuplicateDefinitionDiagnostics(doc *document.Docume
 	firstSeen := make(map[string]first)
 	var diags []protocol.Diagnostic
 	for i, s := range syms {
-		if isSingletonKind(s.Kind) {
+		if isSingletonKind(s.Kind) || isAdditiveEntryKind(s.Kind) {
 			continue
 		}
 		// Jinja false-positive gate (chunt-otg.21): definitions guarded by
@@ -114,16 +114,23 @@ func (f *CiscoIOSFeature) runDuplicateDefinitionDiagnostics(doc *document.Docume
 		if s.Guarded || symbols.HasJinjaExpression(s.Name) {
 			continue
 		}
-		key := string(s.Kind) + "\x00" + s.Name
+		key := duplicateKey(s)
 		if prior, ok := firstSeen[key]; !ok {
 			firstSeen[key] = first{idx: i, sym: s}
 		} else {
+			msg := fmt.Sprintf("duplicate %s definition %q", s.Kind, s.Name)
+			if s.Seq != "" {
+				// Seq-addressed entries (prefix-lists): the repeated seq
+				// REPLACES the earlier entry at merge time, so name the
+				// conflicting entry in the message (chunt-otg.6).
+				msg = fmt.Sprintf("duplicate %s %q entry seq %s; the later definition replaces it", s.Kind, s.Name, s.Seq)
+			}
 			diags = append(diags, protocol.Diagnostic{
 				Range:    s.NameRange,
 				Severity: protocol.SeverityWarning,
 				Source:   "chunt",
 				Code:     "duplicate-" + string(s.Kind),
-				Message:  fmt.Sprintf("duplicate %s definition %q", s.Kind, s.Name),
+				Message:  msg,
 				RelatedInformation: []protocol.DiagnosticRelatedInformation{{
 					Location: protocol.Location{URI: prior.sym.URI, Range: prior.sym.NameRange},
 					Message:  "first defined here",
@@ -132,6 +139,19 @@ func (f *CiscoIOSFeature) runDuplicateDefinitionDiagnostics(doc *document.Docume
 		}
 	}
 	return diags
+}
+
+// duplicateKey builds the first-seen map key for one symbol in the
+// duplicate-definition pass. Seq-carrying kinds (prefix-list entries) are
+// keyed on (kind, name, seq) because a list's entries are additive — a
+// second `ip prefix-list PL seq 20` line extends the list rather than
+// duplicating it; only a repeated SEQ is a conflict (chunt-otg.6). Every
+// other kind keys on (kind, name).
+func duplicateKey(s symbols.Symbol) string {
+	if s.Seq != "" {
+		return string(s.Kind) + "\x00" + s.Name + "\x00" + s.Seq
+	}
+	return string(s.Kind) + "\x00" + s.Name
 }
 
 // builtInNames lists identifiers that never appear as explicit definitions
@@ -153,4 +173,15 @@ func isBuiltInName(kind symbols.Kind, name string) bool {
 // a duplicate-definition condition). Currently only KindRedundancy.
 func isSingletonKind(kind symbols.Kind) bool {
 	return kind == symbols.KindRedundancy
+}
+
+// isAdditiveEntryKind reports whether kind's definition lines are additive
+// entries within one named object — community-list / as-path ACL
+// permit|deny lines (chunt-otg.6). A second entry extends the object, so no
+// whole-object duplicate condition exists for these kinds; an exact-text
+// repeat of an entry line is already owned by the duplicate-command pass.
+// (Prefix-list entries are additive too, but their explicit `seq N` gives
+// the duplicate pass a real collision key — see duplicateKey.)
+func isAdditiveEntryKind(kind symbols.Kind) bool {
+	return kind == symbols.KindCommunityList || kind == symbols.KindAsPathACL
 }

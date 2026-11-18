@@ -24,6 +24,11 @@ var lspSymbolKind = map[symbols.Kind]int{
 	symbols.KindRedundancy: protocol.SymbolKindNamespace, // 3
 	symbols.KindACL:        protocol.SymbolKindNamespace, // 3
 	symbols.KindHostname:   protocol.SymbolKindVariable,  // 13 — string identifier
+
+	// Routing policy objects (chunt-otg.6).
+	symbols.KindPrefixList:    protocol.SymbolKindNamespace, // 3
+	symbols.KindCommunityList: protocol.SymbolKindNamespace, // 3
+	symbols.KindAsPathACL:     protocol.SymbolKindNamespace, // 3
 }
 
 // DocumentSymbol implements textDocument/documentSymbol. Returns one entry

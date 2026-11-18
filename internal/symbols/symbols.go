@@ -29,6 +29,13 @@ const (
 	KindRedundancy     Kind = "redundancy"
 	KindACL            Kind = "acl"
 	KindHostname       Kind = "hostname"
+
+	// Routing policy objects (chunt-otg.6). All are referenced by name from
+	// route-maps and routing protocols (see the undefined-ref refSpecs); the
+	// kinds also give go-to-definition / find-references / outline support.
+	KindPrefixList    Kind = "prefix-list"
+	KindCommunityList Kind = "community-list"
+	KindAsPathACL     Kind = "as-path-acl"
 )
 
 // Symbol is a named definition site extracted from a parsed document.
@@ -38,6 +45,12 @@ type Symbol struct {
 	URI       string
 	Range     protocol.Range // full section / line range
 	NameRange protocol.Range // just the name token (Definition / highlight)
+	// Seq carries the explicit `seq N` entry number for kinds whose entries
+	// are seq-addressed (currently prefix-lists). "" when the command form
+	// has no seq clause. The duplicate-definition pass keys seq-carrying
+	// entries on (kind, name, seq) so a second entry in the same list is not
+	// a whole-list duplicate; a REPEATED seq is.
+	Seq string
 	// Guarded reports whether the definition sits inside a Jinja block that
 	// renders conditionally or repeatedly ({% if %}/{% elif %}/{% else %}/
 	// {% for %}). Guarded definitions satisfy references from any branch
@@ -301,6 +314,15 @@ func Extract(uri string, root *sitter.Node, content []byte) []Symbol {
 	}
 	var out []Symbol
 	walkNamed(root, func(n *sitter.Node) bool {
+		// A negated command REMOVES a definition (`no ip prefix-list PL2
+		// seq 10 ...`, `no hostname R9`); it can never introduce one, so
+		// prune the whole subtree (chunt-otg.6). Extraction previously
+		// descended into negated_statement bodies and registered the negated
+		// definition as a real symbol — flagging remove-then-re-add patterns
+		// as duplicates.
+		if n.Kind() == "negated_statement" {
+			return false
+		}
 		if sym, ok := extractSection(uri, n, content); ok {
 			finishSymbol(&sym, n)
 			out = append(out, sym)
@@ -312,6 +334,9 @@ func Extract(uri string, root *sitter.Node, content []byte) []Symbol {
 		return true
 	})
 	walkNamed(root, func(n *sitter.Node) bool {
+		if n.Kind() == "negated_statement" {
+			return false // same prune as the section walk above
+		}
 		if sym, ok := extractFlat(uri, n, content); ok {
 			finishSymbol(&sym, n)
 			out = append(out, sym)
@@ -324,8 +349,8 @@ func Extract(uri string, root *sitter.Node, content []byte) []Symbol {
 // extractFlat dispatches a flat *_statement node (one that is not a
 // hierarchical section) to the appropriate symbol extractor. Currently
 // handles access_list_statement (numbered ACL form),
-// hostname_statement, and command_line (named-ACL fallback). Add new
-// flat statement kinds here.
+// hostname_statement, and command_line (named-ACL fallback plus the
+// chunt-otg.6 routing policy objects). Add new flat statement kinds here.
 func extractFlat(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 	switch n.Kind() {
 	case "access_list_statement":
@@ -333,6 +358,9 @@ func extractFlat(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 	case "hostname_statement":
 		return extractHostname(uri, n, content)
 	case "command_line":
+		if sym, ok := extractRoutingPolicy(uri, n, content); ok {
+			return sym, true
+		}
 		return extractNamedACLCommandLine(uri, n, content)
 	}
 	return Symbol{}, false
@@ -489,6 +517,74 @@ func extractACL(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		Range:     nodeRange(n),
 		NameRange: nodeRange(nameArg),
 	}, true
+}
+
+// extractRoutingPolicy extracts the chunt-otg.6 routing policy objects from
+// flat command_line nodes. All three families parse flat today (the grammar
+// models them as generic command lines — see the epic's grammar note), so
+// extraction is hostname-style: leading token + arg-position name.
+//
+//	ip prefix-list NAME [seq N] permit|deny ...   (KindPrefixList)
+//	ipv6 prefix-list NAME [seq N] permit|deny ...  (KindPrefixList)
+//	ip community-list standard|expanded NAME ...   (KindCommunityList)
+//	ip community-list N permit|deny ...            (KindCommunityList, numbered)
+//	ip as-path access-list N permit|deny ...       (KindAsPathACL, numbered)
+//
+// Numbered forms normalize the number to its string form so definitions and
+// references compare as written (no padding), mirroring extractACL.
+func extractRoutingPolicy(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
+	leading, args, argNodes := leadingAndArgs(n, content)
+	if len(args) < 2 {
+		return Symbol{}, false
+	}
+	switch {
+	case (leading == "ip" || leading == "ipv6") && args[0] == "prefix-list":
+		nameNode := argNodes[1]
+		sym := Symbol{
+			Kind:      KindPrefixList,
+			Name:      textOf(nameNode, content),
+			URI:       uri,
+			Range:     nodeRange(n),
+			NameRange: nodeRange(nameNode),
+		}
+		// `seq N` clause: the explicit entry number. Entries without seq are
+		// auto-numbered by IOS and carry no static identity.
+		if len(args) >= 4 && args[2] == "seq" {
+			sym.Seq = args[3]
+		}
+		return sym, true
+	case leading == "ip" && args[0] == "community-list":
+		// `ip community-list standard|expanded NAME ...` vs the numbered form
+		// `ip community-list <1-199> permit|deny ...`.
+		if len(args) >= 3 && (args[1] == "standard" || args[1] == "expanded") {
+			nameNode := argNodes[2]
+			return Symbol{
+				Kind:      KindCommunityList,
+				Name:      textOf(nameNode, content),
+				URI:       uri,
+				Range:     nodeRange(n),
+				NameRange: nodeRange(nameNode),
+			}, true
+		}
+		nameNode := argNodes[1]
+		return Symbol{
+			Kind:      KindCommunityList,
+			Name:      textOf(nameNode, content),
+			URI:       uri,
+			Range:     nodeRange(n),
+			NameRange: nodeRange(nameNode),
+		}, true
+	case leading == "ip" && args[0] == "as-path" && len(args) >= 3 && args[1] == "access-list":
+		nameNode := argNodes[2]
+		return Symbol{
+			Kind:      KindAsPathACL,
+			Name:      textOf(nameNode, content),
+			URI:       uri,
+			Range:     nodeRange(n),
+			NameRange: nodeRange(nameNode),
+		}, true
+	}
+	return Symbol{}, false
 }
 
 // extractNamedACLCommandLine recovers an ACL definition from an
