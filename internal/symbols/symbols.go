@@ -681,26 +681,6 @@ func namedChildByKind(n *sitter.Node, kind string) *sitter.Node {
 	return nil
 }
 
-// namedArgs returns the named children of n that carry the "arg" field
-// (the trailing args of a command_line, after the leading identifier).
-// The leading identifier itself (the "name" field) is excluded.
-func namedArgs(n *sitter.Node) []*sitter.Node {
-	var out []*sitter.Node
-	nameNode := n.ChildByFieldName("name")
-	for i := uint(0); i < n.NamedChildCount(); i++ {
-		c := n.NamedChild(i)
-		if c == nil {
-			continue
-		}
-		// Skip the leading identifier (the "name" field).
-		if nameNode != nil && c.Id() == nameNode.Id() {
-			continue
-		}
-		out = append(out, c)
-	}
-	return out
-}
-
 func textOf(n *sitter.Node, content []byte) string {
 	if n == nil {
 		return ""
@@ -755,6 +735,14 @@ type refSpec struct {
 	// (`match ip address prefix-list PL1 PL2` cites two lists). Trailing
 	// direction keywords (in|out) are skipped.
 	Varargs bool
+	// Keywords switches to keyword-scan matching (chunt-otg.11): the
+	// referenced name follows the first arg equal to one of these keywords,
+	// at ANY position. Needed when the name sits after a variable number of
+	// tokens (`redistribute ospf 1 route-map RM` vs `redistribute static
+	// route-map RM`) or when several keywords can each cite a map
+	// (`neighbor 2.2.2.2 advertise-map ADV exist-map NONEX`). ArgIndex is
+	// ignored when Keywords is set.
+	Keywords []string
 }
 
 var refSpecs = []refSpec{
@@ -772,6 +760,18 @@ var refSpecs = []refSpec{
 	{Leading: []string{"neighbor", "*", "prefix-list"}, ArgIndex: 0, Kind: KindPrefixList},
 	{Leading: []string{"distribute-list", "prefix"}, ArgIndex: 0, Kind: KindPrefixList},
 	{Leading: []string{"distribute-list", "prefix-list"}, ArgIndex: 0, Kind: KindPrefixList},
+
+	// Route-map references from routing protocols (chunt-otg.11). The
+	// name follows a keyword at a variable position, so these scan.
+	// (`table-map NAME` also cites a route-map but lexes as command_line(table)
+	// + an unnamed text node — needs a grammar statement rule; see the
+	// grammar-repo bead referenced from chunt-otg.11.)
+	{
+		Leading: []string{"neighbor"}, Kind: KindRouteMap,
+		Keywords: []string{"route-map", "advertise-map", "unsuppress-map", "exist-map", "non-exist-map"},
+	},
+	{Leading: []string{"redistribute"}, Kind: KindRouteMap, Keywords: []string{"route-map"}},
+	{Leading: []string{"distribute-list", "route-map"}, ArgIndex: 0, Kind: KindRouteMap},
 }
 
 // refSectionSpec describes a hierarchical section node whose header names a
@@ -848,17 +848,13 @@ func ExtractReferences(uri string, root *sitter.Node, content []byte) []Referenc
 	return refs
 }
 
-// appendSpecReferences emits the reference(s) for one matched refSpec: the
-// single arg at (len(Leading)-1 + ArgIndex), or — for Varargs specs — every
-// arg from that index onward, skipping trailing direction keywords (in|out).
-// Each emitted reference gets the chunt-otg.21 Jinja pass applied.
+// appendSpecReferences emits the reference(s) for one matched refSpec:
+// keyword-scan mode (Keywords set — the name follows each keyword occurrence
+// at any position), the single arg at (len(Leading)-1 + ArgIndex), or — for
+// Varargs specs — every arg from that index onward, skipping trailing
+// direction keywords (in|out). Each emitted reference gets the chunt-otg.21
+// Jinja pass applied.
 func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Node, n *sitter.Node, uri string, content []byte) []Reference {
-	// argNodes parallels fullSeq[1:] (leading is Child(0); args are the
-	// rest). Index into argNodes by (len(Leading)-1 + ArgIndex).
-	idx := len(spec.Leading) - 1 + spec.ArgIndex
-	if idx >= len(argNodes) {
-		return refs
-	}
 	emit := func(nameNode *sitter.Node) []Reference {
 		ref := Reference{
 			Kind:  spec.Kind,
@@ -868,6 +864,24 @@ func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Nod
 		}
 		finishReference(&ref, n)
 		return append(refs, ref)
+	}
+	if len(spec.Keywords) > 0 {
+		kwSet := make(map[string]bool, len(spec.Keywords))
+		for _, k := range spec.Keywords {
+			kwSet[k] = true
+		}
+		for i := 0; i+1 < len(argNodes); i++ {
+			if kwSet[textOf(argNodes[i], content)] {
+				refs = emit(argNodes[i+1])
+			}
+		}
+		return refs
+	}
+	// argNodes parallels fullSeq[1:] (leading is Child(0); args are the
+	// rest). Index into argNodes by (len(Leading)-1 + ArgIndex).
+	idx := len(spec.Leading) - 1 + spec.ArgIndex
+	if idx >= len(argNodes) {
+		return refs
 	}
 	if !spec.Varargs {
 		return emit(argNodes[idx])
@@ -967,13 +981,9 @@ func leadingAndArgs(n *sitter.Node, content []byte) (string, []string, []*sitter
 	return leading, args, argNodes
 }
 
-// prefixMatch reports whether a begins with every element of b in order.
-func prefixMatch(a, b []string) bool {
-	return prefixMatchWild(a, b)
-}
-
-// prefixMatchWild is prefixMatch with wildcard support: a "*" element of b
-// matches any single element of a (chunt-otg.10).
+// prefixMatchWild reports whether a begins with every element of b in order,
+// with wildcard support: a "*" element of b matches any single element of a
+// (chunt-otg.10).
 func prefixMatchWild(a, b []string) bool {
 	if len(a) < len(b) {
 		return false
