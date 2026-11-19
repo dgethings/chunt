@@ -88,10 +88,10 @@ vlan {{ vlan_id }}
 		guarded[string(s.Kind)+" "+s.Name] = s.Guarded
 	}
 	want := map[string]bool{
-		"acl TOP":            false,
-		"acl CORE":           true,
-		"acl BRANCH":         true,
-		"vlan {{vlan_id}}":   true,
+		"acl TOP":          false,
+		"acl CORE":         true,
+		"acl BRANCH":       true,
+		"vlan {{vlan_id}}": true,
 	}
 	if len(guarded) != len(want) {
 		t.Fatalf("got %v, want keys %v", guarded, want)

@@ -29,6 +29,11 @@ var lspSymbolKind = map[symbols.Kind]int{
 	symbols.KindPrefixList:    protocol.SymbolKindNamespace, // 3
 	symbols.KindCommunityList: protocol.SymbolKindNamespace, // 3
 	symbols.KindAsPathACL:     protocol.SymbolKindNamespace, // 3
+
+	// ACL families (chunt-otg.9).
+	symbols.KindACLv6:  protocol.SymbolKindNamespace, // 3
+	symbols.KindMACACL: protocol.SymbolKindNamespace, // 3
+	symbols.KindARPACL: protocol.SymbolKindNamespace, // 3
 }
 
 // DocumentSymbol implements textDocument/documentSymbol. Returns one entry

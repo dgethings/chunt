@@ -28,6 +28,9 @@ const (
 	KindLine           Kind = "line"
 	KindRedundancy     Kind = "redundancy"
 	KindACL            Kind = "acl"
+	KindACLv6          Kind = "ipv6-acl"
+	KindMACACL         Kind = "mac-acl"
+	KindARPACL         Kind = "arp-acl"
 	KindHostname       Kind = "hostname"
 
 	// Routing policy objects (chunt-otg.6). All are referenced by name from
@@ -361,9 +364,40 @@ func extractFlat(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		if sym, ok := extractRoutingPolicy(uri, n, content); ok {
 			return sym, true
 		}
+		if sym, ok := extractFamilyACLCommandLine(uri, n, content); ok {
+			return sym, true
+		}
 		return extractNamedACLCommandLine(uri, n, content)
 	}
 	return Symbol{}, false
+}
+
+// extractFamilyACLCommandLine recovers the chunt-otg.9 ACL families that the
+// grammar parses as FLAT command lines: `ipv6 access-list NAME` and
+// `arp access-list NAME` (neither has the standard|extended type word that
+// promotes the line into an ip_access_list_section, and the section header's
+// leading bare identifier only accepts `ip`/`mac`). Numbered-name
+// normalization matches the v4 path: names compare as written, string form.
+func extractFamilyACLCommandLine(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
+	leading, args, argNodes := leadingAndArgs(n, content)
+	if leading != "ipv6" && leading != "arp" {
+		return Symbol{}, false
+	}
+	if len(args) < 2 || args[0] != "access-list" {
+		return Symbol{}, false
+	}
+	kind := KindARPACL
+	if leading == "ipv6" {
+		kind = KindACLv6
+	}
+	nameNode := argNodes[1]
+	return Symbol{
+		Kind:      kind,
+		Name:      textOf(nameNode, content),
+		URI:       uri,
+		Range:     nodeRange(n),
+		NameRange: nodeRange(nameNode),
+	}, true
 }
 
 // sectionSpec describes how to extract a Symbol from a *_section node.
@@ -377,6 +411,10 @@ type sectionSpec struct {
 	kind        Kind   // LSP-facing symbol kind
 	headerKind  string // child node kind holding the name
 	nameField   string // field name on the header carrying the name token
+	// resolveKind, when non-nil, overrides kind from the header node (used
+	// for section nodes shared by several families — ip_access_list_section
+	// carries both `ip` and `mac` access-lists; chunt-otg.9).
+	resolveKind func(header *sitter.Node, content []byte) Kind
 	// synthesize, when non-nil, builds the Symbol.Name from the header node
 	// (used by line_section and redundancy_section which have no single
 	// `name` field).
@@ -416,7 +454,16 @@ var sectionSpecs = []sectionSpec{
 	// ab0d95a) resolved the collision via the same `_cmd_arg` alias trick
 	// used by the other six section keywords, so named ACLs now parse as a
 	// real hierarchical section with a header carrying the `name` field.
-	{sectionKind: "ip_access_list_section", kind: KindACL, headerKind: "ip_access_list_header", nameField: "name"},
+	//
+	// The SAME section node also carries `mac access-list extended NAME`
+	// (the header rule starts with a bare identifier, so `mac` lexes into
+	// it too — chunt-otg.9). resolveKind picks the family from the header's
+	// leading identifier so a MAC ACL never satisfies an `ip access-group`
+	// reference and vice versa.
+	{
+		sectionKind: "ip_access_list_section", kind: KindACL, headerKind: "ip_access_list_header", nameField: "name",
+		resolveKind: aclFamilyKind,
+	},
 }
 
 func extractSection(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
@@ -432,6 +479,9 @@ func extractSection(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 			Kind:  sp.kind,
 			URI:   uri,
 			Range: nodeRange(n),
+		}
+		if sp.resolveKind != nil {
+			sym.Kind = sp.resolveKind(header, content)
 		}
 		if sp.synthesize != nil {
 			name, nameRange := sp.synthesize(header, content)
@@ -455,6 +505,16 @@ func extractSection(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		return sym, true
 	}
 	return Symbol{}, false
+}
+
+// aclFamilyKind resolves the ACL family from an ip_access_list_header's
+// leading identifier: `mac access-list ...` sections carry KindMACACL;
+// everything else (the bare `ip` identifier) is the IPv4 KindACL (chunt-otg.9).
+func aclFamilyKind(header *sitter.Node, content []byte) Kind {
+	if first := header.Child(0); first != nil && textOf(first, content) == "mac" {
+		return KindMACACL
+	}
+	return KindACL
 }
 
 // synthesizeLineName builds a stable key from `line <type> <first> [last]`,
