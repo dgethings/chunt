@@ -808,7 +808,7 @@ type refSpec struct {
 var refSpecs = []refSpec{
 	{Leading: []string{"ip", "access-group"}, ArgIndex: 0, Kind: KindACL},
 	{Leading: []string{"access-class"}, ArgIndex: 0, Kind: KindACL},
-	{Leading: []string{"match", "ip", "address"}, ArgIndex: 0, Kind: KindACL},
+	{Leading: []string{"match", "ip", "address"}, ArgIndex: 0, Kind: KindACL, Varargs: true},
 	{Leading: []string{"ip", "policy", "route-map"}, ArgIndex: 0, Kind: KindRouteMap},
 	{Leading: []string{"service", "-policy"}, ArgIndex: 1, Kind: KindPolicyMap},
 	{Leading: []string{"class"}, ArgIndex: 0, Kind: KindClassMap},
@@ -832,6 +832,22 @@ var refSpecs = []refSpec{
 	},
 	{Leading: []string{"redistribute"}, Kind: KindRouteMap, Keywords: []string{"route-map"}},
 	{Leading: []string{"distribute-list", "route-map"}, ArgIndex: 0, Kind: KindRouteMap},
+
+	// ACL reference completion (chunt-otg.13). The bare distribute-list
+	// spec also covers `neighbor <ip> distribute-list <N|NAME>` — the
+	// grammar emits the distribute-list as its own statement nested in the
+	// neighbor line. The longer distribute-list specs above shadow this one
+	// for prefix-list / route-map forms.
+	{Leading: []string{"distribute-list"}, ArgIndex: 0, Kind: KindACL},
+	// IPv6 ACLs are their own family (chunt-otg.9): a v4 ACL of the same
+	// name must not satisfy a traffic-filter reference.
+	{Leading: []string{"ipv6", "traffic-filter"}, ArgIndex: 0, Kind: KindACLv6},
+	// `snmp-server community STR [view V] RO|RW <N|NAME>` — the ACL follows
+	// the RO|RW keyword when present (a trailing RO with no ACL cites
+	// nothing).
+	{Leading: []string{"snmp-server"}, Kind: KindACL, Keywords: []string{"RO", "RW"}},
+	// NAT bindings: `ip nat inside|outside source|destination list <N|NAME> ...`.
+	{Leading: []string{"ip", "nat"}, Kind: KindACL, Keywords: []string{"list"}},
 }
 
 // refSectionSpec describes a hierarchical section node whose header names a
