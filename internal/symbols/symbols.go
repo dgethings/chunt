@@ -810,6 +810,11 @@ type refSpec struct {
 	// and the child-policy form `service-policy PM-CHILD` inside a
 	// policy-map class body (chunt-otg.14). ArgIndex/Keywords ignored.
 	LastArg bool
+	// IfaceShape: only emit the arg when it LOOKS like an interface name
+	// (leading letter, not a known non-interface word). Needed where the
+	// same arg position carries either an interface or a next-hop IP
+	// (`ip route <prefix> <mask> <iface-or-ip>` — chunt-otg.16).
+	IfaceShape bool
 }
 
 var refSpecs = []refSpec{
@@ -864,6 +869,27 @@ var refSpecs = []refSpec{
 	// (string normalization).
 	{Leading: []string{"match", "community"}, ArgIndex: 0, Kind: KindCommunityList},
 	{Leading: []string{"match", "as-path"}, ArgIndex: 0, Kind: KindAsPathACL, Varargs: true},
+
+	// Interface-name references (chunt-otg.16). Exact spelling and exact
+	// sub-interface names (Gi0/1.100) — IOS abbreviations are not valid in
+	// these positions, so literal string comparison is correct.
+	// Next-hop IPs / `dhcp` / the definition-less blackhole target Null0
+	// are filtered by IfaceShape.
+	{Leading: []string{"ip", "route"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true},
+	{Leading: []string{"ip", "route", "vrf", "*"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true},
+	{Leading: []string{"match", "interface"}, ArgIndex: 0, Kind: KindInterface, Varargs: true},
+	{Leading: []string{"set", "interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"logging", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"ntp", "source"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"snmp-server", "trap-source"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"ip", "tftp", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"ip", "ssh", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"ip", "ftp", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"ip", "domain", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"ip", "tacacs", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"ip", "radius", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"monitor", "session", "*", "*", "interface"}, ArgIndex: 0, Kind: KindInterface},
+	{Leading: []string{"standby", "*", "track"}, ArgIndex: 0, Kind: KindInterface},
 }
 
 // refSectionSpec describes a hierarchical section node whose header names a
@@ -948,9 +974,13 @@ func ExtractReferences(uri string, root *sitter.Node, content []byte) []Referenc
 // Jinja pass applied.
 func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Node, n *sitter.Node, uri string, content []byte) []Reference {
 	emit := func(nameNode *sitter.Node) []Reference {
+		tok := textOf(nameNode, content)
+		if spec.IfaceShape && !looksLikeIfaceName(tok) {
+			return refs
+		}
 		ref := Reference{
 			Kind:  spec.Kind,
-			Name:  textOf(nameNode, content),
+			Name:  tok,
 			URI:   uri,
 			Range: nodeRange(nameNode),
 		}
@@ -1189,4 +1219,25 @@ func finishSymbol(sym *Symbol, n *sitter.Node) {
 func finishReference(ref *Reference, n *sitter.Node) {
 	ref.Name = NormalizeJinjaName(ref.Name)
 	ref.Guarded = isJinjaGuarded(n)
+}
+
+// ifaceShapeSkip lists words that sit where an interface name would in
+// `ip route` but never name an interface: the dhcp next-hop form and the
+// definition-less blackhole target Null0 (chunt-otg.16).
+var ifaceShapeSkip = map[string]bool{
+	"dhcp":  true,
+	"null0": true,
+}
+
+// looksLikeIfaceName reports whether tok can be an interface name: a leading
+// letter (next-hop IPs are digit-leading) and not a skip-listed word.
+func looksLikeIfaceName(tok string) bool {
+	if tok == "" {
+		return false
+	}
+	c := tok[0]
+	if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z') {
+		return false
+	}
+	return !ifaceShapeSkip[strings.ToLower(tok)]
 }
