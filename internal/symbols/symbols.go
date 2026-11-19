@@ -848,6 +848,12 @@ var refSpecs = []refSpec{
 	{Leading: []string{"snmp-server"}, Kind: KindACL, Keywords: []string{"RO", "RW"}},
 	// NAT bindings: `ip nat inside|outside source|destination list <N|NAME> ...`.
 	{Leading: []string{"ip", "nat"}, Kind: KindACL, Keywords: []string{"list"}},
+
+	// Community-list and as-path ACL references in route-map bodies
+	// (chunt-otg.12). Numbered and named forms both compare as written
+	// (string normalization).
+	{Leading: []string{"match", "community"}, ArgIndex: 0, Kind: KindCommunityList},
+	{Leading: []string{"match", "as-path"}, ArgIndex: 0, Kind: KindAsPathACL, Varargs: true},
 }
 
 // refSectionSpec describes a hierarchical section node whose header names a
