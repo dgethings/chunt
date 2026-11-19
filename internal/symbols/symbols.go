@@ -777,7 +777,7 @@ func nodeRange(n *sitter.Node) protocol.Range {
 //
 //	{["ip", "access-group"], 0, KindACL}            -> ip access-group NAME in|out
 //	{["match", "ip", "address"], 0, KindACL}        -> match ip address NAME
-//	{["service", "-policy"], 1, KindPolicyMap}      -> service-policy input NAME
+//	{["service", "-policy"], KindPolicyMap, LastArg} -> service-policy [type ...] <dir> NAME
 //	    (`service-policy` parses as service_statement(args=["-policy", dir, NAME])
 //	    because `service` is a prec-2 keyword that splits the hyphenated literal)
 //	{["class"], 0, KindClassMap}                    -> class NAME (inside policy-map body)
@@ -803,6 +803,13 @@ type refSpec struct {
 	// (`neighbor 2.2.2.2 advertise-map ADV exist-map NONEX`). ArgIndex is
 	// ignored when Keywords is set.
 	Keywords []string
+	// LastArg: the referenced name is the command's final arg — the
+	// service-policy shape, where the policy-map name always comes last
+	// regardless of how many type/direction keywords precede it:
+	// `service-policy input PM`, `service-policy type control output CP`,
+	// and the child-policy form `service-policy PM-CHILD` inside a
+	// policy-map class body (chunt-otg.14). ArgIndex/Keywords ignored.
+	LastArg bool
 }
 
 var refSpecs = []refSpec{
@@ -810,7 +817,10 @@ var refSpecs = []refSpec{
 	{Leading: []string{"access-class"}, ArgIndex: 0, Kind: KindACL},
 	{Leading: []string{"match", "ip", "address"}, ArgIndex: 0, Kind: KindACL, Varargs: true},
 	{Leading: []string{"ip", "policy", "route-map"}, ArgIndex: 0, Kind: KindRouteMap},
-	{Leading: []string{"service", "-policy"}, ArgIndex: 1, Kind: KindPolicyMap},
+	// service-policy attach points (chunt-otg.14): the policy-map name is
+	// always the last arg across the plain, type-qualified, and
+	// child-policy-in-class-body shapes.
+	{Leading: []string{"service", "-policy"}, Kind: KindPolicyMap, LastArg: true},
 	{Leading: []string{"class"}, ArgIndex: 0, Kind: KindClassMap},
 	{Leading: []string{"switchport", "access", "vlan"}, ArgIndex: 0, Kind: KindVlan},
 
@@ -946,6 +956,12 @@ func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Nod
 		}
 		finishReference(&ref, n)
 		return append(refs, ref)
+	}
+	if spec.LastArg {
+		if len(argNodes) == 0 {
+			return refs
+		}
+		return emit(argNodes[len(argNodes)-1])
 	}
 	if len(spec.Keywords) > 0 {
 		kwSet := make(map[string]bool, len(spec.Keywords))
