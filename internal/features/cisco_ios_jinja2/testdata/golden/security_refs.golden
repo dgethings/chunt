@@ -1,0 +1,19 @@
+# golden for security_refs.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/security_refs$' -update
+
+## diagnostics
+HINT     <no-code>              1:1-18 | match is valid in config-domain-vrf-mc-class, not in config
+WARNING  duplicate-crypto-map   3:11-14 | duplicate crypto-map "CM1" entry seq 10; the later definition replaces it  ~> security_refs.cfg 0:11-14 "first defined here"
+HINT     unused-isakmp-policy   7:21-23 | isakmp-policy "10" is never referenced; the definition has no effect
+HINT     unused-isakmp-profile  10:22-27 | isakmp-profile "PROF1" is never referenced; the definition has no effect
+HINT     unused-ipsec-profile   12:21-25 | ipsec-profile "IPP1" is never referenced; the definition has no effect
+WARNING  undefined-ipsec-profile 16:33-44 | undefined ipsec-profile "MISSING-IPP"
+HINT     unused-zone            18:14-20 | zone "INSIDE" is never referenced; the definition has no effect
+HINT     unused-parameter-map   20:9-30 | parameter-map "PM1" is never referenced; the definition has no effect
+HINT     <no-code>              23:16-29 | inspect is valid in config-pmap-c, not in config-pmap
+HINT     unused-policy-map      23:16-29 | policy-map "PM-IN" is never referenced; the definition has no effect
+HINT     <no-code>              25:2-9 | inspect is valid in config-pmap-c, not in config-pmap
+HINT     <no-code>              31:23-28 | match is valid in config-domain-vrf-mc-class, not in config-cmap
+HINT     <no-code>              32:1-19 | match is valid in config-domain-vrf-mc-class, not in config-cmap
+WARNING  undefined-peer-group   38:30-39 | undefined peer-group "NOSUCH-PG"
+HINT     unused-acl             40:12-15 | acl "101" is never referenced; the definition has no effect

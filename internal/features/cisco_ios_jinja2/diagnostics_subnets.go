@@ -76,8 +76,10 @@ func (f *CiscoIOSFeature) runSubnetDiagnostics(doc *document.Document, tree *sit
 			if a.iface == b.iface {
 				continue // same-interface conflicts are redefined-setting's
 			}
-			if a.vrf != "" && b.vrf != "" && a.vrf != b.vrf {
-				continue // separate routing tables may reuse a subnet
+			// Different VRFs (including global vs a named VRF) are separate
+			// routing tables and may legitimately reuse a subnet.
+			if a.vrf != b.vrf {
+				continue
 			}
 			switch {
 			case a.sub == b.sub:

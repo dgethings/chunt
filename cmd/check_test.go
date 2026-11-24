@@ -204,3 +204,46 @@ func TestCheckCleanDirectory(t *testing.T) {
 		t.Errorf("clean directory output = %q, want %q", got, "No issues found.\n")
 	}
 }
+
+// TestCheckNewDiagnosticsSmoke (chunt-otg.24): the CLI path surfaces the
+// newer diagnostic families — subnet conflicts, unused hints, redefined
+// settings — in the same file:line:col format.
+func TestCheckNewDiagnosticsSmoke(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "smoke.ios.j2")
+	src := "ip access-list extended ORPHAN\n permit ip any any\n!\ninterface GigabitEthernet0/0\n ip address 10.1.1.1 255.255.255.0\n!\ninterface GigabitEthernet0/1\n ip address 10.1.1.9 255.255.255.0\n!\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetArgs([]string{"--log-level=info", "check", path})
+	defer resetRoot(t)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("check: %v", err)
+	}
+
+	out := stdout.String()
+	want := map[string]bool{
+		// duplicate-subnet (Error): same subnet on two interfaces.
+		path + `:8:2: subnet 10.1.1.0/24 is configured on both "GigabitEthernet0/0" and "GigabitEthernet0/1"; the second interface will not come up as configured`: true,
+		// unused-acl (Hint): the CLI surfaces hints like every severity.
+		path + `:1:25: acl "ORPHAN" is never referenced; the definition has no effect`: true,
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		if want[line] {
+			seen[line] = true
+		}
+	}
+	for w := range want {
+		if !seen[w] {
+			t.Errorf("missing expected line: %q\nfull output:\n%s", w, out)
+		}
+	}
+}

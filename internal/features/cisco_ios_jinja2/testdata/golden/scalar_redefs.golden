@@ -1,0 +1,9 @@
+# golden for scalar_redefs.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/scalar_redefs$' -update
+
+## diagnostics
+ERROR    redefined-setting      3:0-11 | banner motd "^Authorized only^" replaces "^Welcome to r1^"; only the last definition takes effect  ~> scalar_redefs.cfg 2:0-11 "first defined here"
+ERROR    redefined-setting      6:0-30 | ip domain-name "new.example.com" replaces "old.example.com"; only the last definition takes effect  ~> scalar_redefs.cfg 5:0-30 "first defined here"
+ERROR    redefined-setting      9:0-23 | enable secret/password "letmein" replaces "5 $1$abc$def"; only the last definition takes effect  ~> scalar_redefs.cfg 8:0-15 "first defined here"
+ERROR    redefined-setting      13:1-34 | neighbor remote-as "65003" replaces "65002"; only the last definition takes effect  ~> scalar_redefs.cfg 12:1-34 "first defined here"
+ERROR    redefined-setting      18:1-23 | standby priority "120" replaces "110"; only the last definition takes effect  ~> scalar_redefs.cfg 17:1-23 "first defined here"

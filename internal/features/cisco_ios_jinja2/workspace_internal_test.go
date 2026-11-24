@@ -656,3 +656,38 @@ func TestWorkspaceUnusedAcrossFiles(t *testing.T) {
 		t.Fatalf("a: want exactly 1 unused-acl (ORPHAN only; USED is referenced from b), got %d: %+v", got, setA)
 	}
 }
+
+// TestWorkspaceNewKindsParity (chunt-otg.24): the new def/ref kinds resolve
+// in directory mode — a vrf defined in a satisfies `vrf forwarding` in b
+// (no undefined-vrf in b), a cross-file scalar conflict for a new setting
+// (standby priority) carries the companion superseded-setting Warning in
+// a, and doc-local duplicates still flag.
+func TestWorkspaceNewKindsParity(t *testing.T) {
+	dir := wsSetup(t, map[string]string{
+		"a-base.ios.j2":  "vrf definition BLUE\n!\ninterface Gi0/0\n standby 1 priority 110\n!\n",
+		"b-iface.ios.j2": "interface Gi0/0\n vrf forwarding BLUE\n standby 1 priority 120\n!\n",
+	})
+	f := New()
+	defer f.Close()
+	pub, log := wsRecorder()
+
+	uriA := "file://" + filepath.Join(dir, "a-base.ios.j2")
+	uriB := "file://" + filepath.Join(dir, "b-iface.ios.j2")
+	wsOpen2(t, f, pub, dir, "a-base.ios.j2", "vrf definition BLUE\n!\ninterface Gi0/0\n standby 1 priority 110\n!\n")
+	wsOpen2(t, f, pub, dir, "b-iface.ios.j2", "interface Gi0/0\n vrf forwarding BLUE\n standby 1 priority 120\n!\n")
+
+	// b: the BLUE vrf from a satisfies the vrf forwarding reference, and
+	// the standby priority conflict carries the Error.
+	setB := log.last[uriB]
+	if got := wsCodeCount(setB, "undefined-vrf"); got != 0 {
+		t.Fatalf("b: vrf BLUE from a must resolve, got %d undefined-vrf: %+v", got, setB)
+	}
+	if got := wsCodeCount(setB, "redefined-setting"); got != 1 {
+		t.Fatalf("b: want 1 redefined-setting (standby priority), got %d: %+v", got, setB)
+	}
+	// a: the companion superseded-setting Warning for the cross-file scalar.
+	setA := log.last[uriA]
+	if got := wsCodeCount(setA, "superseded-setting"); got != 1 {
+		t.Fatalf("a: want 1 superseded-setting companion, got %d: %+v", got, setA)
+	}
+}

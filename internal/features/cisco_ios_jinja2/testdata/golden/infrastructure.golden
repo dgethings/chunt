@@ -1,0 +1,24 @@
+# golden for infrastructure.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/infrastructure$' -update
+
+## diagnostics
+WARNING  duplicate-command      2:0-19 | duplicate command "vrf definition BLUE"; already defined earlier in this section  ~> infrastructure.cfg 0:0-19 "first defined here"
+WARNING  duplicate-vrf          2:15-19 | duplicate vrf definition "BLUE"  ~> infrastructure.cfg 0:15-19 "first defined here"
+HINT     unused-vrf             4:7-13 | vrf "LEGACY" is never referenced; the definition has no effect
+HINT     <no-code>              5:1-9 | rd is valid in config-vrf, not in config
+HINT     unused-track           7:6-7 | track "1" is never referenced; the definition has no effect
+WARNING  duplicate-track        8:6-7 | duplicate track definition "1"  ~> infrastructure.cfg 7:6-7 "first defined here"
+HINT     unused-key-chain       10:10-13 | key-chain "KC1" is never referenced; the definition has no effect
+HINT     <no-code>              11:1-6 | key is valid in config-keychain, not in config
+HINT     <no-code>              12:2-5 | key is valid in config-keychain, not in config
+HINT     <no-code>              15:1-31 | network is valid in config-ipv6-pmipv6-domain-mn, not in config
+WARNING  duplicate-sla          20:4-5 | duplicate sla definition "1"  ~> infrastructure.cfg 17:7-8 "first defined here"
+HINT     <no-code>              21:1-38 | type echo protocol ipIcmpEcho is valid in config-sla-monitor, not in config
+HINT     unused-time-range      23:4-19 | time-range "BUSINESS" is never referenced; the definition has no effect
+HINT     <no-code>              24:1-33 | periodic is valid in config-time-range, not in config
+WARNING  duplicate-command      26:0-4 | duplicate command "time"; already defined earlier in this section  ~> infrastructure.cfg 23:0-4 "first defined here"
+WARNING  duplicate-time-range   26:4-19 | duplicate time-range definition "BUSINESS"  ~> infrastructure.cfg 23:4-19 "first defined here"
+WARNING  undefined-interface    30:40-58 | undefined interface "GigabitEthernet0/1"
+WARNING  undefined-vrf          33:16-27 | undefined vrf "MISSING-VRF"
+HINT     unused-nat-pool        37:12-20 | nat-pool "POOL-NAT" is never referenced; the definition has no effect
+WARNING  undefined-nat-pool     38:39-49 | undefined nat-pool "OTHER-POOL"

@@ -117,6 +117,17 @@ interface Gi0/1
 `,
 		},
 		{
+			name: "global table vs named VRF is legitimate",
+			src: `interface Gi0/0
+ ip address 10.1.1.1 255.255.255.0
+!
+interface Vlan10
+ vrf forwarding MGMT
+ ip address 10.1.1.2 255.255.255.0
+!
+`,
+		},
+		{
 			name: "dhcp and unnumbered are skipped",
 			src: `interface Gi0/0
  ip address dhcp
