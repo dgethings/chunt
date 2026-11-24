@@ -507,6 +507,19 @@ func extractSection(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		if n.Kind() != sp.sectionKind {
 			continue
 		}
+		header := namedChildByKind(n, sp.headerKind)
+		if header == nil {
+			return Symbol{}, false
+		}
+		// Typed section headers (chunt-otg.15): `policy-map type inspect
+		// PM1` and `class-map type inspect match-any CM1` parse as sections
+		// whose header swallows only through the type word — the header's
+		// name field lands on "type"/"inspect" (garbage that collides as a
+		// duplicate across every typed map). Recover the REAL name from the
+		// grammar leftovers; untyped headers keep the plain path.
+		if isTypedSectionHeader(sp, header, content) {
+			return extractTypedSection(uri, n, sp, content)
+		}
 		// A vrf definition's address-family sub-blocks (chunt-otg.7): the
 		// grammar (v0.3.1) has no vrf section, so a `vrf definition BLUE`
 		// body surfaces its `address-family ipv4` as a TOP-LEVEL sibling
@@ -516,10 +529,6 @@ func extractSection(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		// all (cross-repo note: a real vrf_section in the grammar would
 		// scope these properly).
 		if sp.sectionKind == "address_family_section" && precededByVRFHeader(n, content) {
-			return Symbol{}, false
-		}
-		header := namedChildByKind(n, sp.headerKind)
-		if header == nil {
 			return Symbol{}, false
 		}
 		sym := Symbol{
@@ -571,6 +580,85 @@ func precededByVRFHeader(n *sitter.Node, content []byte) bool {
 		return false
 	}
 	return false
+}
+
+// isTypedSectionHeader reports whether the section header is the typed
+// policy-map/class-map form (`policy-map type inspect PM1`), which the
+// grammar truncates at the type word (chunt-otg.15).
+func isTypedSectionHeader(sp sectionSpec, header *sitter.Node, content []byte) bool {
+	return (sp.sectionKind == "policy_map_section" || sp.sectionKind == "class_map_section") &&
+		headerFirstValueText(header, content) == "type"
+}
+
+// extractTypedSection builds the Symbol for a typed policy-map/class-map
+// section, recovering the real name from the grammar leftovers via
+// recoverTypedSectionName. Unrecoverable shapes register no symbol (never a
+// garbage "type"/"inspect" name).
+func extractTypedSection(uri string, n *sitter.Node, sp sectionSpec, content []byte) (Symbol, bool) {
+	name, nameNode, ok := recoverTypedSectionName(sp.sectionKind, n, content)
+	if !ok {
+		return Symbol{}, false
+	}
+	return Symbol{
+		Kind:      sp.kind,
+		Name:      name,
+		URI:       uri,
+		Range:     nodeRange(n),
+		NameRange: nodeRange(nameNode),
+	}, true
+}
+
+// headerFirstValueText returns the text of the header's first value-kind
+// child (the kw child comes first, so this is the first header word after
+// the command keyword).
+func headerFirstValueText(header *sitter.Node, content []byte) string {
+	for i := uint(0); i < header.ChildCount(); i++ {
+		c := header.Child(i)
+		if c != nil && c.IsNamed() && c.Kind() == "value" {
+			return textOf(c, content)
+		}
+	}
+	return ""
+}
+
+// recoverTypedSectionName recovers the real name of a typed policy-map /
+// class-map section from the grammar leftovers (chunt-otg.15):
+//
+//	policy-map type inspect PM1  → first body command_line "inspect PM1"
+//	                             (the header remainder); name = last field
+//	class-map type inspect match-any CM1 → text catch-all "-any CM1" after
+//	                             match-any's split match_statement; name =
+//	                             last field of the -any/-all tail
+//
+// NameRange spans the carrier node (precise with a grammar keyword).
+func recoverTypedSectionName(sectionKind string, n *sitter.Node, content []byte) (string, *sitter.Node, bool) {
+	if sectionKind == "policy_map_section" {
+		for i := uint(0); i < n.ChildCount(); i++ {
+			c := n.Child(i)
+			if c == nil || !c.IsNamed() || c.Kind() != "command_line" {
+				continue
+			}
+			fields := strings.Fields(strings.TrimSpace(textOf(c, content)))
+			if len(fields) < 2 {
+				return "", nil, false // remainder line without a name
+			}
+			return fields[len(fields)-1], c, true
+		}
+		return "", nil, false
+	}
+	// class_map_section: the match-any/match-all word splits, leaving the
+	// name in a text catch-all.
+	for i := uint(0); i < n.ChildCount(); i++ {
+		c := n.Child(i)
+		if c == nil || !c.IsNamed() || c.Kind() != "text" {
+			continue
+		}
+		fields := strings.Fields(strings.TrimSpace(textOf(c, content)))
+		if len(fields) >= 2 {
+			return fields[len(fields)-1], c, true
+		}
+	}
+	return "", nil, false
 }
 
 // aclFamilyKind resolves the ACL family from an ip_access_list_header's
@@ -1193,6 +1281,13 @@ var refSpecs = []refSpec{
 	{Leading: []string{"match", "community"}, ArgIndex: 0, Kind: KindCommunityList},
 	{Leading: []string{"match", "as-path"}, ArgIndex: 0, Kind: KindAsPathACL, Varargs: true},
 
+	// Typed class attach points (chunt-otg.15): `class type inspect CM1`
+	// in policy-map type inspect bodies — the wildcard shadows the bare
+	// [class] spec (whose ArgIndex would misread the literal "type" as a
+	// class-map name). The nameless `class type inspect-self` line has no
+	// arg at ArgIndex 0, so it emits nothing while still shadowing.
+	{Leading: []string{"class", "type", "*"}, ArgIndex: 0, Kind: KindClassMap},
+
 	// Interface-name references (chunt-otg.16). Exact spelling and exact
 	// sub-interface names (Gi0/1.100) — IOS abbreviations are not valid in
 	// these positions, so literal string comparison is correct.
@@ -1243,6 +1338,26 @@ var refSpecs = []refSpec{
 	// sub-command is v1-skipped per the issue.
 	{Leading: []string{"vrf", "forwarding"}, ArgIndex: 0, Kind: KindVRF},
 	{Leading: []string{"ip", "vrf", "forwarding"}, ArgIndex: 0, Kind: KindVRF},
+
+	// Zone-based firewall references (chunt-otg.15). `zone-member security
+	// NAME` is recovered from the text catch-all in extractTextReference
+	// (hyphenated-keyword grammar gap); zone-pair source/destination names
+	// are v1-skipped per the issue. service-policy type inspect already
+	// resolves via the LastArg policy-map spec.
+
+	// Crypto/IPsec references (chunt-otg.19). The interface apply site
+	// `crypto map NAME` — IfaceShape filters definition lines, whose
+	// ArgIndex-0 slot is the numeric SEQ (a crypto map apply never cites a
+	// digit name). `set transform-set` covers crypto map entries and ipsec
+	// profile bodies (Varargs: several sets may be listed, first is
+	// preferred); `set isakmp-profile` binds an entry to an isakmp profile;
+	// tunnel protection binds a tunnel interface to an ipsec profile. The
+	// definition-line self-reference on apply sites resolves against the
+	// definition itself (documented NAT-pool convention).
+	{Leading: []string{"crypto", "map"}, ArgIndex: 0, Kind: KindCryptoMap, IfaceShape: true},
+	{Leading: []string{"set", "transform-set"}, ArgIndex: 0, Kind: KindTransformSet, Varargs: true},
+	{Leading: []string{"set", "isakmp-profile"}, ArgIndex: 0, Kind: KindIsakmpProfile},
+	{Leading: []string{"tunnel", "protection", "ipsec", "profile"}, ArgIndex: 0, Kind: KindIPsecProfile},
 }
 
 // refSectionSpec describes a hierarchical section node whose header names a
@@ -1285,6 +1400,14 @@ func ExtractReferences(uri string, root *sitter.Node, content []byte) []Referenc
 		// policy_map_class_section). These are not command-like, so handle them
 		// before the command-line path below; keep descending either way.
 		if r, ok := extractSectionReference(uri, n, content); ok {
+			finishReference(&r, n)
+			refs = append(refs, r)
+		}
+		// Hyphenated keyword headers the grammar can't lex (time-range,
+		// parameter-map, zone-member — chunt-otg.15) leave a catch-all text node
+		// beside a bare first-word command_line; reference sites in that text
+		// are recovered here.
+		if r, ok := extractTextReference(uri, n, content); ok {
 			finishReference(&r, n)
 			refs = append(refs, r)
 		}
@@ -1450,6 +1573,33 @@ func isNegated(n *sitter.Node) bool {
 		}
 	}
 	return false
+}
+
+// extractTextReference recovers a reference site from the catch-all text
+// node left behind when the grammar cannot lex a hyphenated keyword
+// (chunt-otg.15): `zone-member security NAME` parses as a bare `zone`
+// command_line followed by text "-member security NAME" — the zone name is
+// required for the interface to join its security zone, and an undefined
+// name means the interface silently sits outside every zone policy. Only
+// the opt-in shapes below are recovered; the text node must directly follow
+// the bare leading word. NameRange spans the whole catch-all node (a
+// grammar keyword would give a precise range).
+func extractTextReference(uri string, n *sitter.Node, content []byte) (Reference, bool) {
+	if n.Kind() != "text" {
+		return Reference{}, false
+	}
+	prev := n.PrevNamedSibling()
+	if prev == nil || prev.Kind() != "command_line" || strings.TrimSpace(textOf(prev, content)) != "zone" {
+		return Reference{}, false
+	}
+	if rest, ok := strings.CutPrefix(strings.TrimSpace(textOf(n, content)), "-member security "); ok {
+		fields := strings.Fields(rest)
+		if len(fields) == 0 {
+			return Reference{}, false
+		}
+		return Reference{Kind: KindZone, Name: fields[0], URI: uri, Range: nodeRange(n)}, true
+	}
+	return Reference{}, false
 }
 
 // extractSectionReference extracts a Reference from a section-shaped node
