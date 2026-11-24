@@ -145,6 +145,7 @@ func (f *CiscoIOSFeature) runRefDiagnostics(doc *document.Document, defScope []s
 	diags := make([]protocol.Diagnostic, 0)
 	diags = append(diags, f.runUndefinedReferenceDiagnostics(doc, defScope)...)
 	diags = append(diags, f.runDuplicateDefinitionDiagnostics(doc)...)
+	diags = append(diags, f.runUnusedDefinitionDiagnostics(doc, defScope)...)
 	return diags
 }
 

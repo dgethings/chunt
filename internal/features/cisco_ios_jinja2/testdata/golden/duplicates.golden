@@ -3,6 +3,7 @@
 
 ## diagnostics
 WARNING  duplicate-route-map    2:10-13 | duplicate route-map definition "FOO"  ~> duplicates.cfg 0:10-13 "first defined here"
+HINT     unused-class-map       4:20-23 | class-map "BAR" is never referenced; the definition has no effect
 WARNING  duplicate-class-map    6:20-23 | duplicate class-map definition "BAR"  ~> duplicates.cfg 4:20-23 "first defined here"
 WARNING  duplicate-interface    10:10-15 | duplicate interface definition "Gi0/0"  ~> duplicates.cfg 8:10-15 "first defined here"
 WARNING  duplicate-router       14:11-14 | duplicate router definition "100"  ~> duplicates.cfg 12:11-14 "first defined here"

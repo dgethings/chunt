@@ -634,3 +634,25 @@ func TestWorkspaceRegistryScalarAcrossFiles(t *testing.T) {
 		t.Errorf("a: want 0 redefined-setting, got %d", got)
 	}
 }
+
+// TestWorkspaceUnusedAcrossFiles (chunt-otg.23): a definition referenced in
+// ANY file of the directory group counts as used, while a definition no
+// file references still hints — anchored in its own file's publish.
+func TestWorkspaceUnusedAcrossFiles(t *testing.T) {
+	dir := wsSetup(t, map[string]string{
+		"a-base.ios.j2":  "ip access-list extended USED\n permit ip any any\n!\nip access-list extended ORPHAN\n permit ip any any\n!\n",
+		"b-iface.ios.j2": "interface Gi0/0\n ip access-group USED in\n!\n",
+	})
+	f := New()
+	defer f.Close()
+	pub, log := wsRecorder()
+
+	uriA := "file://" + filepath.Join(dir, "a-base.ios.j2")
+	wsOpen2(t, f, pub, dir, "a-base.ios.j2", "ip access-list extended USED\n permit ip any any\n!\nip access-list extended ORPHAN\n permit ip any any\n!\n")
+	wsOpen2(t, f, pub, dir, "b-iface.ios.j2", "interface Gi0/0\n ip access-group USED in\n!\n")
+
+	setA := log.last[uriA]
+	if got := wsCodeCount(setA, "unused-acl"); got != 1 {
+		t.Fatalf("a: want exactly 1 unused-acl (ORPHAN only; USED is referenced from b), got %d: %+v", got, setA)
+	}
+}

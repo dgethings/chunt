@@ -37,12 +37,15 @@ const wireURI = "file:///wire.ios.j2"
 
 // wireFixtureInitial is opened over the wire. It contains exactly one known
 // diagnostic — the undefined ACL reference "MISSING" — while FOO is defined
-// (and referenced twice) so the definition/references paths resolve cleanly.
+// (and referenced twice) and RM is referenced from Gi0/0, so the
+// definition/references paths resolve cleanly and nothing flags unused
+// (chunt-otg.23).
 const wireFixtureInitial = `! wire-test fixture
 hostname r1
 !
 interface GigabitEthernet0/0
  ip access-group MISSING in
+ ip policy route-map RM
 !
 interface GigabitEthernet1/0
  ip access-group FOO in
@@ -62,6 +65,7 @@ hostname r1
 !
 interface GigabitEthernet0/0
  ip access-group FOO in
+ ip policy route-map RM
 !
 interface GigabitEthernet1/0
  ip access-group FOO in

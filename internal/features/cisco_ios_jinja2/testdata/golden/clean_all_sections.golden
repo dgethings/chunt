@@ -2,7 +2,8 @@
 #   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/clean_all_sections$' -update
 
 ## diagnostics
-<none>
+HINT     unused-acl             25:24-31 | acl "ACL-EXT" is never referenced; the definition has no effect
+HINT     unused-acl             28:12-14 | acl "10" is never referenced; the definition has no effect
 
 ## hover @ 4:0  hostname keyword -> docstring
 kind=markdown

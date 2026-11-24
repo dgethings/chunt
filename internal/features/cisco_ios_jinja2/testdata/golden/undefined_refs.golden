@@ -5,6 +5,7 @@
 WARNING  undefined-acl          1:17-21 | undefined acl "ACL1"
 WARNING  undefined-route-map    2:21-24 | undefined route-map "RM1"
 WARNING  undefined-vlan         3:24-27 | undefined vlan "999"
+HINT     unused-policy-map      5:11-13 | policy-map "PM" is never referenced; the definition has no effect
 WARNING  undefined-class-map    6:7-10 | undefined class-map "CM1"
 WARNING  undefined-acl          9:14-18 | undefined acl "ACL2"
 WARNING  undefined-policy-map   11:21-24 | undefined policy-map "PM2"
