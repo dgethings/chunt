@@ -162,6 +162,13 @@ var builtInNames = map[string]map[string]bool{
 	string(symbols.KindClassMap): {
 		"class-default": true,
 	},
+	// VRF built-ins (chunt-otg.17): the implicit global and the automatic
+	// management VRF are valid reference targets no template defines.
+	string(symbols.KindVRF): {
+		"global":   true,
+		"Mgmt-vrf": true,
+		"mgmt-vrf": true,
+	},
 }
 
 func isBuiltInName(kind symbols.Kind, name string) bool {

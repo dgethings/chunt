@@ -1025,6 +1025,18 @@ type refSpec struct {
 	// same arg position carries either an interface or a next-hop IP
 	// (`ip route <prefix> <mask> <iface-or-ip>` — chunt-otg.16).
 	IfaceShape bool
+	// WildcardKind: when Leading contains a "*" wildcard and the word that
+	// matched it is itself a named-object reference, emit that word as this
+	// kind (chunt-otg.17: `ip route vrf <NAME> ...` — the interface spec's
+	// wildcard slot IS the VRF name). Specs whose wildcard is a variable
+	// token (the neighbor IP) leave it unset. Requires Kind to stay unset
+	// semantics for the plain positional branch — WildcardKind emission is
+	// additive and does not displace the spec's own ArgIndex emission.
+	WildcardKind Kind
+	// KeywordKinds overrides Kind per keyword in the Keywords scan
+	// (chunt-otg.17: `ip nat ... list <ACL> ... vrf <VRF>` cites an ACL and
+	// a VRF from one line — one spec, two kinds).
+	KeywordKinds map[string]Kind
 }
 
 var refSpecs = []refSpec{
@@ -1072,7 +1084,11 @@ var refSpecs = []refSpec{
 	// nothing).
 	{Leading: []string{"snmp-server"}, Kind: KindACL, Keywords: []string{"RO", "RW"}},
 	// NAT bindings: `ip nat inside|outside source|destination list <N|NAME> ...`.
-	{Leading: []string{"ip", "nat"}, Kind: KindACL, Keywords: []string{"list"}},
+	// The `vrf` keyword (chunt-otg.17) cites a VRF on the same lines
+	// (`... list ACL1 pool POOL1 vrf BLUE overload`, `... static 10.1.1.1
+	// 200.1.1.1 vrf BLUE`) — KeywordKinds routes each keyword to its kind.
+	{Leading: []string{"ip", "nat"}, Kind: KindACL, Keywords: []string{"list", "vrf"},
+		KeywordKinds: map[string]Kind{"vrf": KindVRF}},
 
 	// Community-list and as-path ACL references in route-map bodies
 	// (chunt-otg.12). Numbered and named forms both compare as written
@@ -1084,9 +1100,10 @@ var refSpecs = []refSpec{
 	// sub-interface names (Gi0/1.100) — IOS abbreviations are not valid in
 	// these positions, so literal string comparison is correct.
 	// Next-hop IPs / `dhcp` / the definition-less blackhole target Null0
-	// are filtered by IfaceShape.
+	// are filtered by IfaceShape. On the vrf form the wildcard slot IS the
+	// VRF name, emitted via WildcardKind (chunt-otg.17).
 	{Leading: []string{"ip", "route"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true},
-	{Leading: []string{"ip", "route", "vrf", "*"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true},
+	{Leading: []string{"ip", "route", "vrf", "*"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true, WildcardKind: KindVRF},
 	{Leading: []string{"match", "interface"}, ArgIndex: 0, Kind: KindInterface, Varargs: true},
 	{Leading: []string{"set", "interface"}, ArgIndex: 0, Kind: KindInterface},
 	{Leading: []string{"logging", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
@@ -1100,6 +1117,15 @@ var refSpecs = []refSpec{
 	{Leading: []string{"ip", "radius", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
 	{Leading: []string{"monitor", "session", "*", "*", "interface"}, ArgIndex: 0, Kind: KindInterface},
 	{Leading: []string{"standby", "*", "track"}, ArgIndex: 0, Kind: KindInterface},
+
+	// VRF references (chunt-otg.17). The interface binding forms:`vrf
+	// forwarding NAME` and the legacy `ip vrf forwarding NAME`. The BGP
+	// per-neighbor `vrf` keyword from the issue's verify list does NOT
+	// exist in IOS config (VRF neighbors live inside `address-family ipv4
+	// vrf NAME` blocks), so there is no neighbor spec. The dhcp-pool `vrf`
+	// sub-command is v1-skipped per the issue.
+	{Leading: []string{"vrf", "forwarding"}, ArgIndex: 0, Kind: KindVRF},
+	{Leading: []string{"ip", "vrf", "forwarding"}, ArgIndex: 0, Kind: KindVRF},
 }
 
 // refSectionSpec describes a hierarchical section node whose header names a
@@ -1183,13 +1209,13 @@ func ExtractReferences(uri string, root *sitter.Node, content []byte) []Referenc
 // direction keywords (in|out). Each emitted reference gets the chunt-otg.21
 // Jinja pass applied.
 func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Node, n *sitter.Node, uri string, content []byte) []Reference {
-	emit := func(nameNode *sitter.Node) []Reference {
+	emit := func(kind Kind, nameNode *sitter.Node) []Reference {
 		tok := textOf(nameNode, content)
 		if spec.IfaceShape && !looksLikeIfaceName(tok) {
 			return refs
 		}
 		ref := Reference{
-			Kind:  spec.Kind,
+			Kind:  kind,
 			Name:  tok,
 			URI:   uri,
 			Range: nodeRange(nameNode),
@@ -1197,23 +1223,25 @@ func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Nod
 		finishReference(&ref, n)
 		return append(refs, ref)
 	}
+	// WildcardKind: the word that matched a Leading "*" slot is itself a
+	// reference of that kind (argNodes parallels fullSeq[1:], so Leading
+	// index i is argNodes[i-1]). Only specs that opt in (the wildcard is a
+	// name, not a variable like the neighbor IP).
+	if spec.WildcardKind != "" {
+		for i, w := range spec.Leading {
+			if w == "*" && i > 0 && i-1 < len(argNodes) {
+				refs = emit(spec.WildcardKind, argNodes[i-1])
+			}
+		}
+	}
 	if spec.LastArg {
 		if len(argNodes) == 0 {
 			return refs
 		}
-		return emit(argNodes[len(argNodes)-1])
+		return emit(spec.Kind, argNodes[len(argNodes)-1])
 	}
 	if len(spec.Keywords) > 0 {
-		kwSet := make(map[string]bool, len(spec.Keywords))
-		for _, k := range spec.Keywords {
-			kwSet[k] = true
-		}
-		for i := 0; i+1 < len(argNodes); i++ {
-			if kwSet[textOf(argNodes[i], content)] {
-				refs = emit(argNodes[i+1])
-			}
-		}
-		return refs
+		return appendKeywordReferences(refs, spec, argNodes, n, uri, content)
 	}
 	// argNodes parallels fullSeq[1:] (leading is Child(0); args are the
 	// rest). Index into argNodes by (len(Leading)-1 + ArgIndex).
@@ -1222,14 +1250,46 @@ func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Nod
 		return refs
 	}
 	if !spec.Varargs {
-		return emit(argNodes[idx])
+		return emit(spec.Kind, argNodes[idx])
 	}
 	for _, nameNode := range argNodes[idx:] {
 		t := textOf(nameNode, content)
 		if t == "in" || t == "out" {
 			continue
 		}
-		refs = emit(nameNode)
+		refs = emit(spec.Kind, nameNode)
+	}
+	return refs
+}
+
+// appendKeywordReferences scans for every arg equal to one of spec's
+// Keywords and emits the FOLLOWING arg as a reference. The kind defaults to
+// spec.Kind; KeywordKinds routes individual keywords to other kinds
+// (chunt-otg.17: NAT `list` cites an ACL while `vrf` on the same line cites
+// a VRF).
+func appendKeywordReferences(refs []Reference, spec refSpec, argNodes []*sitter.Node, n *sitter.Node, uri string, content []byte) []Reference {
+	emit := func(kind Kind, nameNode *sitter.Node) []Reference {
+		ref := Reference{
+			Kind:  kind,
+			Name:  textOf(nameNode, content),
+			URI:   uri,
+			Range: nodeRange(nameNode),
+		}
+		finishReference(&ref, n)
+		return append(refs, ref)
+	}
+	kwSet := make(map[string]bool, len(spec.Keywords))
+	for _, k := range spec.Keywords {
+		kwSet[k] = true
+	}
+	for i := 0; i+1 < len(argNodes); i++ {
+		if kw := textOf(argNodes[i], content); kwSet[kw] {
+			kind := spec.Kind
+			if k, ok := spec.KeywordKinds[kw]; ok {
+				kind = k
+			}
+			refs = emit(kind, argNodes[i+1])
+		}
 	}
 	return refs
 }
