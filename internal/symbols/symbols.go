@@ -55,6 +55,18 @@ const (
 	KindMonitorSession Kind = "monitor-session"
 	KindTimeRange      Kind = "time-range"
 	KindNATPool        Kind = "nat-pool"
+
+	// Security/FW objects (chunt-otg.8). Definitions feed the duplicate
+	// pass and are the targets of the crypto/zone reference checks
+	// (chunt-otg.15/.19). Crypto maps are seq-addressed like prefix-lists:
+	// entries are additive per map, a repeated SEQ is the conflict.
+	KindCryptoMap     Kind = "crypto-map"
+	KindTransformSet  Kind = "transform-set"
+	KindIsakmpPolicy  Kind = "isakmp-policy"
+	KindIsakmpProfile Kind = "isakmp-profile"
+	KindIPsecProfile  Kind = "ipsec-profile"
+	KindZone          Kind = "zone"
+	KindParameterMap  Kind = "parameter-map"
 )
 
 // Symbol is a named definition site extracted from a parsed document.
@@ -727,12 +739,13 @@ func extractRoutingPolicy(uri string, n *sitter.Node, content []byte) (Symbol, b
 // matches that shape (requires the preceding bare-`time` command_line) and
 // is superseded once the grammar promotes the keyword.
 func extractInfrastructure(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
-	kind, nameNode, ok := infrastructureDefinition(n, content)
+	kind, nameNode, seq, ok := infrastructureDefinition(n, content)
 	if !ok {
 		return Symbol{}, false
 	}
 	name := textOf(nameNode, content)
-	if kind == KindTimeRange {
+	switch kind {
+	case KindTimeRange:
 		// The text node carries "-range NAME"; the name is its first field
 		// after the prefix (time-range names have no spaces). NameRange
 		// necessarily spans the whole catch-all node including the prefix —
@@ -740,6 +753,21 @@ func extractInfrastructure(uri string, n *sitter.Node, content []byte) (Symbol, 
 		if rest, cut := strings.CutPrefix(strings.TrimSpace(name), "-range "); cut {
 			name = strings.Fields(rest)[0]
 		}
+	case KindParameterMap:
+		// The text node carries "-map type <kind> NAME" (grammar gap: the
+		// hyphenated `parameter-map` lexes as a bare `parameter` command_line
+		// plus this catch-all). Name is the LAST field; nameless singleton
+		// forms (`parameter-map type inspect-global`) have no kind+name pair
+		// and are skipped.
+		rest, cut := strings.CutPrefix(strings.TrimSpace(name), "-map ")
+		if !cut {
+			return Symbol{}, false
+		}
+		fields := strings.Fields(rest)
+		if len(fields) < 3 || fields[0] != "type" {
+			return Symbol{}, false
+		}
+		name = fields[len(fields)-1]
 	}
 	if name == "" {
 		return Symbol{}, false
@@ -750,37 +778,63 @@ func extractInfrastructure(uri string, n *sitter.Node, content []byte) (Symbol, 
 		URI:       uri,
 		Range:     nodeRange(n),
 		NameRange: nodeRange(nameNode),
+		Seq:       seq,
 	}, true
 }
 
-// infrastructureDefinition classifies one flat node into (kind, name node).
-func infrastructureDefinition(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool) {
+// infrastructureDefinition classifies one flat node into (kind, name node,
+// seq — crypto-map entry numbers, "" for the rest).
+func infrastructureDefinition(n *sitter.Node, content []byte) (Kind, *sitter.Node, string, bool) {
 	if n.Kind() == "text" {
-		return timeRangeFromText(n, content)
+		prev := n.PrevNamedSibling()
+		if prev == nil || prev.Kind() != "command_line" {
+			return "", nil, "", false
+		}
+		switch strings.TrimSpace(textOf(prev, content)) {
+		case "time":
+			kind, node, ok := timeRangeFromText(n, content)
+			return kind, node, "", ok
+		case "parameter":
+			if _, _, ok := parameterMapFromText(n, content); !ok {
+				return "", nil, "", false
+			}
+			return KindParameterMap, n, "", true
+		}
+		return "", nil, "", false
 	}
 	if n.Kind() == "rtr_statement" {
 		arg := n.ChildByFieldName("arg")
 		if arg == nil || !isAllDigits(textOf(arg, content)) {
-			return "", nil, false
+			return "", nil, "", false
 		}
-		return KindSLA, arg, true
+		return KindSLA, arg, "", true
 	}
 	return infrastructureCommandLine(n, content)
 }
 
-// timeRangeFromText recovers a time-range definition from the `-range NAME`
-// catch-all text node that follows the bare `time` command_line (grammar
-// v0.3.1 gap; see the function comment on extractInfrastructure).
+// timeRangeFromText validates a `-range NAME` catch-all text node following
+// the bare `time` command_line (grammar v0.3.1 gap; see the function comment
+// on extractInfrastructure).
 func timeRangeFromText(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool) {
-	prev := n.PrevNamedSibling()
-	if prev == nil || prev.Kind() != "command_line" || strings.TrimSpace(textOf(prev, content)) != "time" {
-		return "", nil, false
-	}
 	rest, ok := strings.CutPrefix(strings.TrimSpace(textOf(n, content)), "-range ")
 	if !ok || len(strings.Fields(rest)) == 0 {
 		return "", nil, false
 	}
 	return KindTimeRange, n, true
+}
+
+// parameterMapFromText validates a `-map type ...` catch-all following the
+// bare `parameter` command_line (same grammar gap as time-range).
+func parameterMapFromText(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool) {
+	rest, ok := strings.CutPrefix(strings.TrimSpace(textOf(n, content)), "-map ")
+	if !ok {
+		return "", nil, false
+	}
+	fields := strings.Fields(rest)
+	if len(fields) < 3 || fields[0] != "type" {
+		return "", nil, false
+	}
+	return KindParameterMap, n, true
 }
 
 // infraForm is one command_line shape in the chunt-otg.7 infrastructure
@@ -789,13 +843,17 @@ func timeRangeFromText(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool
 // object name; numeric requires the name to be a bare number (track/sla/
 // session numbers, filtering `track timer interface`-style forms); exactArgs
 // pins the total arg count (the legacy `ip vrf NAME` header has no extra
-// words, so exactly-2 keeps the interface-level `ip vrf forwarding X` out).
+// words, so exactly-2 keeps the interface-level `ip vrf forwarding X` out);
+// seqIdx (0 = none) is the args index of a crypto-map entry number —
+// seq-addressed kinds fold the seq into Symbol.Seq for the duplicate pass
+// (chunt-otg.8).
 var infraForms = []struct {
 	words     []string
 	nameIdx   int
 	minArgs   int
 	exactArgs int
 	numeric   bool
+	seqIdx    int
 	kind      Kind
 }{
 	{words: []string{"vrf", "definition"}, nameIdx: 1, minArgs: 2, kind: KindVRF},
@@ -806,14 +864,21 @@ var infraForms = []struct {
 	{words: []string{"ip", "nat", "pool"}, nameIdx: 2, minArgs: 3, kind: KindNATPool}, // chunt-otg.18
 	{words: []string{"ip", "sla"}, nameIdx: 1, minArgs: 2, numeric: true, kind: KindSLA},
 	{words: []string{"monitor", "session"}, nameIdx: 1, minArgs: 2, numeric: true, kind: KindMonitorSession},
+	// Security objects (chunt-otg.8).
+	{words: []string{"crypto", "map"}, nameIdx: 1, seqIdx: 2, minArgs: 3, kind: KindCryptoMap},
+	{words: []string{"crypto", "ipsec", "transform-set"}, nameIdx: 2, minArgs: 3, kind: KindTransformSet},
+	{words: []string{"crypto", "isakmp", "policy"}, nameIdx: 2, minArgs: 3, numeric: true, kind: KindIsakmpPolicy},
+	{words: []string{"crypto", "isakmp", "profile"}, nameIdx: 2, minArgs: 3, kind: KindIsakmpProfile},
+	{words: []string{"crypto", "ipsec", "profile"}, nameIdx: 2, minArgs: 3, kind: KindIPsecProfile},
+	{words: []string{"zone", "security"}, nameIdx: 1, minArgs: 2, kind: KindZone},
 }
 
 // infrastructureCommandLine classifies a command_line into one of the
-// chunt-otg.7 infrastructure kinds via the infraForms registry.
-func infrastructureCommandLine(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool) {
+// chunt-otg.7/.8 infrastructure kinds via the infraForms registry.
+func infrastructureCommandLine(n *sitter.Node, content []byte) (Kind, *sitter.Node, string, bool) {
 	leading, args, argNodes := leadingAndArgs(n, content)
 	if len(args) == 0 {
-		return "", nil, false
+		return "", nil, "", false
 	}
 	full := append([]string{leading}, args...)
 	for i := range infraForms {
@@ -827,9 +892,13 @@ func infrastructureCommandLine(n *sitter.Node, content []byte) (Kind, *sitter.No
 		if f.numeric && !isAllDigits(args[f.nameIdx]) {
 			continue
 		}
-		return f.kind, argNodes[f.nameIdx], true
+		var seq string
+		if f.seqIdx > 0 && f.seqIdx < len(args) {
+			seq = args[f.seqIdx]
+		}
+		return f.kind, argNodes[f.nameIdx], seq, true
 	}
-	return "", nil, false
+	return "", nil, "", false
 }
 
 // wordsEqual compares two lowercase command-word slices.
