@@ -39,6 +39,21 @@ const (
 	KindPrefixList    Kind = "prefix-list"
 	KindCommunityList Kind = "community-list"
 	KindAsPathACL     Kind = "as-path-acl"
+
+	// Infrastructure objects (chunt-otg.7). The grammar (v0.3.1) parses
+	// every one of these headers as FLAT lines, so extraction is
+	// command_line-based (see extractInfrastructure); duplicate-definition
+	// warnings follow from the shared pass. KindVRF folds the legacy
+	// `ip vrf NAME` namespace into `vrf definition NAME`, and KindSLA folds
+	// `rtr N` into `ip sla N` — the legacy and modern forms cannot coexist
+	// for the same object in IOS, so conflicts must compare.
+	KindVRF            Kind = "vrf"
+	KindTrack          Kind = "track"
+	KindKeyChain       Kind = "key-chain"
+	KindDHCPPool       Kind = "dhcp-pool"
+	KindSLA            Kind = "sla"
+	KindMonitorSession Kind = "monitor-session"
+	KindTimeRange      Kind = "time-range"
 )
 
 // Symbol is a named definition site extracted from a parsed document.
@@ -353,18 +368,26 @@ func Extract(uri string, root *sitter.Node, content []byte) []Symbol {
 // hierarchical section) to the appropriate symbol extractor. Currently
 // handles access_list_statement (numbered ACL form),
 // hostname_statement, and command_line (named-ACL fallback plus the
-// chunt-otg.6 routing policy objects). Add new flat statement kinds here.
+// chunt-otg.6 routing policy objects and the chunt-otg.7 infrastructure
+// objects). Add new flat statement kinds here.
 func extractFlat(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 	switch n.Kind() {
 	case "access_list_statement":
 		return extractACL(uri, n, content)
 	case "hostname_statement":
 		return extractHostname(uri, n, content)
+	case "rtr_statement", "text":
+		// text: the `-range NAME` catch-all after a bare `time` command_line
+		// (grammar v0.3.1 gap — see extractInfrastructure).
+		return extractInfrastructure(uri, n, content)
 	case "command_line":
 		if sym, ok := extractRoutingPolicy(uri, n, content); ok {
 			return sym, true
 		}
 		if sym, ok := extractFamilyACLCommandLine(uri, n, content); ok {
+			return sym, true
+		}
+		if sym, ok := extractInfrastructure(uri, n, content); ok {
 			return sym, true
 		}
 		return extractNamedACLCommandLine(uri, n, content)
@@ -471,6 +494,17 @@ func extractSection(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		if n.Kind() != sp.sectionKind {
 			continue
 		}
+		// A vrf definition's address-family sub-blocks (chunt-otg.7): the
+		// grammar (v0.3.1) has no vrf section, so a `vrf definition BLUE`
+		// body surfaces its `address-family ipv4` as a TOP-LEVEL sibling
+		// section. Left alone, every VRF carrying the same AF name would
+		// register a duplicate address-family symbol. VRF sub-modes are not
+		// routing-process address-families, so they register no symbol at
+		// all (cross-repo note: a real vrf_section in the grammar would
+		// scope these properly).
+		if sp.sectionKind == "address_family_section" && precededByVRFHeader(n, content) {
+			return Symbol{}, false
+		}
 		header := namedChildByKind(n, sp.headerKind)
 		if header == nil {
 			return Symbol{}, false
@@ -505,6 +539,25 @@ func extractSection(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		return sym, true
 	}
 	return Symbol{}, false
+}
+
+// precededByVRFHeader reports whether an address_family_section's previous
+// siblings chain back to a `vrf definition`/`ip vrf` header line (allowing
+// sibling AF blocks of the same VRF in between, e.g. ipv4 then ipv6). Any
+// other intervening node ends the scan — the AF belongs to the config root
+// or a routing process.
+func precededByVRFHeader(n *sitter.Node, content []byte) bool {
+	for sib := n.PrevNamedSibling(); sib != nil; sib = sib.PrevNamedSibling() {
+		if sib.Kind() == "address_family_section" {
+			continue // earlier AF block of the same VRF: keep scanning back
+		}
+		if sib.Kind() == "command_line" {
+			txt := textOf(sib, content)
+			return strings.HasPrefix(txt, "vrf definition ") || strings.HasPrefix(txt, "ip vrf ")
+		}
+		return false
+	}
+	return false
 }
 
 // aclFamilyKind resolves the ACL family from an ip_access_list_header's
@@ -645,6 +698,163 @@ func extractRoutingPolicy(uri string, n *sitter.Node, content []byte) (Symbol, b
 		}, true
 	}
 	return Symbol{}, false
+}
+
+// extractInfrastructure extracts the chunt-otg.7 infrastructure object
+// definitions from flat nodes. The grammar (v0.3.1) parses every header as
+// a generic line, so this is hostname-style: leading tokens + arg-position
+// name. Cross-repo note: a future grammar with real sections for these
+// (vrf_section, track_section, ...) replaces the flat path via sectionSpecs.
+//
+//	vrf definition NAME          (KindVRF)
+//	ip vrf NAME                  (KindVRF, legacy; exactly-2-args guard keeps
+//	                            the interface-level `ip vrf forwarding X` out)
+//	track N ...                 (KindTrack, numeric N)
+//	key chain NAME              (KindKeyChain)
+//	ip dhcp pool NAME           (KindDHCPPool)
+//	ip sla N                    (KindSLA, numeric N)
+//	rtr N                       (KindSLA, rtr_statement; legacy ip sla)
+//	monitor session N ...       (KindMonitorSession, numeric N; additive —
+//	                            source/destination lines configure the SAME
+//	                            session, so the kind is exempt from the
+//	                            duplicate pass)
+//	time-range NAME             (KindTimeRange)
+//
+// time-range needs a workaround: the grammar has no `time-range` keyword,
+// so the lexer emits command_line "time" (dropping the rest of the word)
+// followed by a catch-all `text` node carrying "-range NAME". Extraction
+// matches that shape (requires the preceding bare-`time` command_line) and
+// is superseded once the grammar promotes the keyword.
+func extractInfrastructure(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
+	kind, nameNode, ok := infrastructureDefinition(n, content)
+	if !ok {
+		return Symbol{}, false
+	}
+	name := textOf(nameNode, content)
+	if kind == KindTimeRange {
+		// The text node carries "-range NAME"; the name is its first field
+		// after the prefix (time-range names have no spaces). NameRange
+		// necessarily spans the whole catch-all node including the prefix —
+		// a grammar keyword would give a precise range.
+		if rest, cut := strings.CutPrefix(strings.TrimSpace(name), "-range "); cut {
+			name = strings.Fields(rest)[0]
+		}
+	}
+	if name == "" {
+		return Symbol{}, false
+	}
+	return Symbol{
+		Kind:      kind,
+		Name:      name,
+		URI:       uri,
+		Range:     nodeRange(n),
+		NameRange: nodeRange(nameNode),
+	}, true
+}
+
+// infrastructureDefinition classifies one flat node into (kind, name node).
+func infrastructureDefinition(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool) {
+	if n.Kind() == "text" {
+		return timeRangeFromText(n, content)
+	}
+	if n.Kind() == "rtr_statement" {
+		arg := n.ChildByFieldName("arg")
+		if arg == nil || !isAllDigits(textOf(arg, content)) {
+			return "", nil, false
+		}
+		return KindSLA, arg, true
+	}
+	return infrastructureCommandLine(n, content)
+}
+
+// timeRangeFromText recovers a time-range definition from the `-range NAME`
+// catch-all text node that follows the bare `time` command_line (grammar
+// v0.3.1 gap; see the function comment on extractInfrastructure).
+func timeRangeFromText(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool) {
+	prev := n.PrevNamedSibling()
+	if prev == nil || prev.Kind() != "command_line" || strings.TrimSpace(textOf(prev, content)) != "time" {
+		return "", nil, false
+	}
+	rest, ok := strings.CutPrefix(strings.TrimSpace(textOf(n, content)), "-range ")
+	if !ok || len(strings.Fields(rest)) == 0 {
+		return "", nil, false
+	}
+	return KindTimeRange, n, true
+}
+
+// infraForm is one command_line shape in the chunt-otg.7 infrastructure
+// registry. words is the command word prefix (leading token + leading args,
+// e.g. ["ip", "dhcp", "pool"]); nameIdx is the args index carrying the
+// object name; numeric requires the name to be a bare number (track/sla/
+// session numbers, filtering `track timer interface`-style forms); exactArgs
+// pins the total arg count (the legacy `ip vrf NAME` header has no extra
+// words, so exactly-2 keeps the interface-level `ip vrf forwarding X` out).
+var infraForms = []struct {
+	words     []string
+	nameIdx   int
+	minArgs   int
+	exactArgs int
+	numeric   bool
+	kind      Kind
+}{
+	{words: []string{"vrf", "definition"}, nameIdx: 1, minArgs: 2, kind: KindVRF},
+	{words: []string{"ip", "vrf"}, nameIdx: 1, minArgs: 2, exactArgs: 2, kind: KindVRF},
+	{words: []string{"track"}, nameIdx: 0, minArgs: 1, numeric: true, kind: KindTrack},
+	{words: []string{"key", "chain"}, nameIdx: 1, minArgs: 2, kind: KindKeyChain},
+	{words: []string{"ip", "dhcp", "pool"}, nameIdx: 2, minArgs: 3, kind: KindDHCPPool},
+	{words: []string{"ip", "sla"}, nameIdx: 1, minArgs: 2, numeric: true, kind: KindSLA},
+	{words: []string{"monitor", "session"}, nameIdx: 1, minArgs: 2, numeric: true, kind: KindMonitorSession},
+}
+
+// infrastructureCommandLine classifies a command_line into one of the
+// chunt-otg.7 infrastructure kinds via the infraForms registry.
+func infrastructureCommandLine(n *sitter.Node, content []byte) (Kind, *sitter.Node, bool) {
+	leading, args, argNodes := leadingAndArgs(n, content)
+	if len(args) == 0 {
+		return "", nil, false
+	}
+	full := append([]string{leading}, args...)
+	for i := range infraForms {
+		f := &infraForms[i]
+		if len(full) < len(f.words) || !wordsEqual(full[:len(f.words)], f.words) {
+			continue
+		}
+		if len(args) < f.minArgs || (f.exactArgs > 0 && len(args) != f.exactArgs) {
+			continue
+		}
+		if f.numeric && !isAllDigits(args[f.nameIdx]) {
+			continue
+		}
+		return f.kind, argNodes[f.nameIdx], true
+	}
+	return "", nil, false
+}
+
+// wordsEqual compares two lowercase command-word slices.
+func wordsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// isAllDigits reports whether s is a non-empty decimal number (track/sla
+// session numbers), filtering other-arg forms like `track timer interface`.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // extractNamedACLCommandLine recovers an ACL definition from an

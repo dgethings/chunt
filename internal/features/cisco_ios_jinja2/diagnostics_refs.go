@@ -177,11 +177,18 @@ func isSingletonKind(kind symbols.Kind) bool {
 
 // isAdditiveEntryKind reports whether kind's definition lines are additive
 // entries within one named object — community-list / as-path ACL
-// permit|deny lines (chunt-otg.6). A second entry extends the object, so no
-// whole-object duplicate condition exists for these kinds; an exact-text
-// repeat of an entry line is already owned by the duplicate-command pass.
-// (Prefix-list entries are additive too, but their explicit `seq N` gives
-// the duplicate pass a real collision key — see duplicateKey.)
+// permit|deny lines (chunt-otg.6) and monitor-session source/destination
+// lines (chunt-otg.7; every `monitor session N ...` line configures the
+// SAME session, so multiple lines per N are the normal shape). A second
+// entry extends the object, so no whole-object duplicate condition exists
+// for these kinds; an exact-text repeat of an entry line is already owned
+// by the duplicate-command pass. (Prefix-list entries are additive too,
+// but their explicit `seq N` gives the duplicate pass a real collision
+// key — see duplicateKey.)
 func isAdditiveEntryKind(kind symbols.Kind) bool {
-	return kind == symbols.KindCommunityList || kind == symbols.KindAsPathACL
+	switch kind {
+	case symbols.KindCommunityList, symbols.KindAsPathACL, symbols.KindMonitorSession:
+		return true
+	}
+	return false
 }
