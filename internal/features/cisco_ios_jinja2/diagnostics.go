@@ -55,6 +55,7 @@ func (f *CiscoIOSFeature) runTreeDiagnostics(doc *document.Document, tree *sitte
 	diags = append(diags, f.runVersionMismatchDiagnostics(doc, tree)...)
 	diags = append(diags, f.collectTreeDiags(doc, tree)...)
 	diags = append(diags, f.runRepeatedCommandDiagnostics(doc, tree)...)
+	diags = append(diags, f.runSubnetDiagnostics(doc, tree)...)
 	return diags
 }
 
