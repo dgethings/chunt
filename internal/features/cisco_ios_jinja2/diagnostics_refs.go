@@ -157,17 +157,27 @@ func duplicateKey(s symbols.Symbol) string {
 // builtInNames lists identifiers that never appear as explicit definitions
 // but are nonetheless valid reference targets (e.g. `class class-default`
 // in a policy-map body). Suppressing these avoids false-positive undefined
-// warnings.
+// warnings. Kept data-driven (map[kind]set) with a suppression test per
+// entry (chunt-otg.22); the interface partial-template tolerance the issue
+// floats is a separate, undecided feature and is deliberately absent.
 var builtInNames = map[string]map[string]bool{
 	string(symbols.KindClassMap): {
 		"class-default": true,
 	},
 	// VRF built-ins (chunt-otg.17): the implicit global and the automatic
-	// management VRF are valid reference targets no template defines.
+	// management VRF (Cat9k spells it "Mgmt-vrf"; both cases suppressed).
 	string(symbols.KindVRF): {
 		"global":   true,
 		"Mgmt-vrf": true,
 		"mgmt-vrf": true,
+	},
+	// Community-list well-known target (chunt-otg.22): the `internet`
+	// keyword. The issue's "standard numbers" bullet is deliberately NOT
+	// implemented: an undefined NUMBERED community-list reference is a real
+	// typo signal and chunt-otg.12's established, tested behavior flags it
+	// (see TestUndefinedCommunityAndAsPath — list 99 must flag).
+	string(symbols.KindCommunityList): {
+		"internet": true,
 	},
 }
 
