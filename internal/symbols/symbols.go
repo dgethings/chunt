@@ -1037,6 +1037,17 @@ type refSpec struct {
 	// (chunt-otg.17: `ip nat ... list <ACL> ... vrf <VRF>` cites an ACL and
 	// a VRF from one line — one spec, two kinds).
 	KeywordKinds map[string]Kind
+	// ElseKind: when IfaceShape REJECTS the arg (not an interface name),
+	// emit it as this kind instead of dropping it (chunt-otg.20:
+	// `standby <grp> track <X>` — X is a legacy interface (Gi0/0) or a
+	// track-object NUMBER; only digits reach the else branch).
+	ElseKind Kind
+	// ExtraKeywords: a secondary keyword scan that runs in ADDITION to the
+	// positional ArgIndex emission, each hit emitting the following arg as
+	// ExtraKind (chunt-otg.20: `ip route <prefix> <mask> <nh> track <N>` —
+	// the track keyword trails the positional next hop).
+	ExtraKeywords []string
+	ExtraKind     Kind
 }
 
 var refSpecs = []refSpec{
@@ -1101,9 +1112,13 @@ var refSpecs = []refSpec{
 	// these positions, so literal string comparison is correct.
 	// Next-hop IPs / `dhcp` / the definition-less blackhole target Null0
 	// are filtered by IfaceShape. On the vrf form the wildcard slot IS the
-	// VRF name, emitted via WildcardKind (chunt-otg.17).
-	{Leading: []string{"ip", "route"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true},
-	{Leading: []string{"ip", "route", "vrf", "*"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true, WildcardKind: KindVRF},
+	// VRF name, emitted via WildcardKind (chunt-otg.17). The trailing
+	// `track <N>` clause cites a track object via ExtraKeywords
+	// (chunt-otg.20).
+	{Leading: []string{"ip", "route"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true,
+		ExtraKeywords: []string{"track"}, ExtraKind: KindTrack},
+	{Leading: []string{"ip", "route", "vrf", "*"}, ArgIndex: 2, Kind: KindInterface, IfaceShape: true, WildcardKind: KindVRF,
+		ExtraKeywords: []string{"track"}, ExtraKind: KindTrack},
 	{Leading: []string{"match", "interface"}, ArgIndex: 0, Kind: KindInterface, Varargs: true},
 	{Leading: []string{"set", "interface"}, ArgIndex: 0, Kind: KindInterface},
 	{Leading: []string{"logging", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
@@ -1116,7 +1131,23 @@ var refSpecs = []refSpec{
 	{Leading: []string{"ip", "tacacs", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
 	{Leading: []string{"ip", "radius", "source-interface"}, ArgIndex: 0, Kind: KindInterface},
 	{Leading: []string{"monitor", "session", "*", "*", "interface"}, ArgIndex: 0, Kind: KindInterface},
-	{Leading: []string{"standby", "*", "track"}, ArgIndex: 0, Kind: KindInterface},
+	// `standby <grp> track <X>` (chunt-otg.16 iface form + chunt-otg.20
+	// object form): X is an interface name (legacy iface tracking) or a
+	// track-object NUMBER — ElseKind routes non-iface-shaped args to
+	// KindTrack. vrrp/glbp carry the track keyword after a variable group
+	// prefix, so they scan.
+	{Leading: []string{"standby", "*", "track"}, ArgIndex: 0, Kind: KindInterface, IfaceShape: true, ElseKind: KindTrack},
+	{Leading: []string{"vrrp"}, Keywords: []string{"track"}, Kind: KindTrack},
+	{Leading: []string{"glbp"}, Keywords: []string{"track"}, Kind: KindTrack},
+
+	// Track references (chunt-otg.20) — covered by the ip route and FHRP
+	// specs above.
+
+	// ACL entry time-range citations (chunt-otg.20): `permit|deny ...
+	// time-range NAME` inside named (ip/ipv6/mac/arp) ACL sections. An
+	// undefined time-range makes the entry silently never match.
+	{Leading: []string{"permit"}, Keywords: []string{"time-range"}, Kind: KindTimeRange},
+	{Leading: []string{"deny"}, Keywords: []string{"time-range"}, Kind: KindTimeRange},
 
 	// VRF references (chunt-otg.17). The interface binding forms:`vrf
 	// forwarding NAME` and the legacy `ip vrf forwarding NAME`. The BGP
@@ -1212,7 +1243,10 @@ func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Nod
 	emit := func(kind Kind, nameNode *sitter.Node) []Reference {
 		tok := textOf(nameNode, content)
 		if spec.IfaceShape && !looksLikeIfaceName(tok) {
-			return refs
+			if spec.ElseKind == "" {
+				return refs
+			}
+			kind = spec.ElseKind // track-object number, not an interface
 		}
 		ref := Reference{
 			Kind:  kind,
@@ -1250,14 +1284,26 @@ func appendSpecReferences(refs []Reference, spec refSpec, argNodes []*sitter.Nod
 		return refs
 	}
 	if !spec.Varargs {
-		return emit(spec.Kind, argNodes[idx])
-	}
-	for _, nameNode := range argNodes[idx:] {
-		t := textOf(nameNode, content)
-		if t == "in" || t == "out" {
-			continue
+		refs = emit(spec.Kind, argNodes[idx])
+	} else {
+		for _, nameNode := range argNodes[idx:] {
+			t := textOf(nameNode, content)
+			if t == "in" || t == "out" {
+				continue
+			}
+			refs = emit(spec.Kind, nameNode)
 		}
-		refs = emit(spec.Kind, nameNode)
+	}
+	// ExtraKeywords run on top of the positional emission (chunt-otg.20:
+	// trailing `track <N>` on static routes).
+	if len(spec.ExtraKeywords) > 0 {
+		extra := spec
+		extra.Keywords = spec.ExtraKeywords
+		extra.KeywordKinds = nil
+		extra.Kind = spec.ExtraKind
+		extra.IfaceShape = false
+		extra.ElseKind = ""
+		return appendKeywordReferences(refs, extra, argNodes, n, uri, content)
 	}
 	return refs
 }
