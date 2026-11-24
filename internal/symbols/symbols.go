@@ -54,6 +54,7 @@ const (
 	KindSLA            Kind = "sla"
 	KindMonitorSession Kind = "monitor-session"
 	KindTimeRange      Kind = "time-range"
+	KindNATPool        Kind = "nat-pool"
 )
 
 // Symbol is a named definition site extracted from a parsed document.
@@ -802,6 +803,7 @@ var infraForms = []struct {
 	{words: []string{"track"}, nameIdx: 0, minArgs: 1, numeric: true, kind: KindTrack},
 	{words: []string{"key", "chain"}, nameIdx: 1, minArgs: 2, kind: KindKeyChain},
 	{words: []string{"ip", "dhcp", "pool"}, nameIdx: 2, minArgs: 3, kind: KindDHCPPool},
+	{words: []string{"ip", "nat", "pool"}, nameIdx: 2, minArgs: 3, kind: KindNATPool}, // chunt-otg.18
 	{words: []string{"ip", "sla"}, nameIdx: 1, minArgs: 2, numeric: true, kind: KindSLA},
 	{words: []string{"monitor", "session"}, nameIdx: 1, minArgs: 2, numeric: true, kind: KindMonitorSession},
 }
@@ -1094,12 +1096,27 @@ var refSpecs = []refSpec{
 	// the RO|RW keyword when present (a trailing RO with no ACL cites
 	// nothing).
 	{Leading: []string{"snmp-server"}, Kind: KindACL, Keywords: []string{"RO", "RW"}},
-	// NAT bindings: `ip nat inside|outside source|destination list <N|NAME> ...`.
-	// The `vrf` keyword (chunt-otg.17) cites a VRF on the same lines
-	// (`... list ACL1 pool POOL1 vrf BLUE overload`, `... static 10.1.1.1
-	// 200.1.1.1 vrf BLUE`) — KeywordKinds routes each keyword to its kind.
+	// NAT bindings (chunt-otg.13/17/18). Translation lines (`ip nat
+	// inside|outside source|destination ...`) match the LONGER specs below
+	// (longest-match-wins), which scan list→ACL, pool→NATPool,
+	// interface→Interface, and vrf→VRF. The bare [ip,nat] spec only sees
+	// lines the translation specs don't match (e.g. pool definition lines
+	// citing a vrf), so a pool definition never self-references through a
+	// pool keyword.
 	{Leading: []string{"ip", "nat"}, Kind: KindACL, Keywords: []string{"list", "vrf"},
 		KeywordKinds: map[string]Kind{"vrf": KindVRF}},
+	{Leading: []string{"ip", "nat", "inside", "source"}, Kind: KindACL,
+		Keywords:     []string{"list", "pool", "interface", "vrf"},
+		KeywordKinds: map[string]Kind{"vrf": KindVRF, "pool": KindNATPool, "interface": KindInterface}},
+	{Leading: []string{"ip", "nat", "outside", "source"}, Kind: KindACL,
+		Keywords:     []string{"list", "pool", "interface", "vrf"},
+		KeywordKinds: map[string]Kind{"vrf": KindVRF, "pool": KindNATPool, "interface": KindInterface}},
+	{Leading: []string{"ip", "nat", "inside", "destination"}, Kind: KindACL,
+		Keywords:     []string{"list", "pool", "vrf"},
+		KeywordKinds: map[string]Kind{"vrf": KindVRF, "pool": KindNATPool}},
+	{Leading: []string{"ip", "nat", "outside", "destination"}, Kind: KindACL,
+		Keywords:     []string{"list", "pool", "vrf"},
+		KeywordKinds: map[string]Kind{"vrf": KindVRF, "pool": KindNATPool}},
 
 	// Community-list and as-path ACL references in route-map bodies
 	// (chunt-otg.12). Numbered and named forms both compare as written
