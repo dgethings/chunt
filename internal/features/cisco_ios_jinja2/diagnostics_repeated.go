@@ -134,6 +134,10 @@ type repeatedTracker struct {
 
 	seen map[string]scopeCmd // trimmed command text -> first occurrence
 
+	// scalars carries the chunt-otg.1 curated registry state for ONE scope:
+	// registry key -> first occurrence + rendered value.
+	scalars map[string]scalarOccurrence
+
 	host      scopeCmd
 	hasHost   bool
 	hostVal   string
@@ -156,6 +160,7 @@ func newRepeatedTracker(kw *keyword.Set, crossFileOnly bool) *repeatedTracker {
 	return &repeatedTracker{
 		kw:            kw,
 		seen:          make(map[string]scopeCmd),
+		scalars:       make(map[string]scalarOccurrence),
 		crossFileOnly: crossFileOnly,
 	}
 }
@@ -192,12 +197,71 @@ func (t *repeatedTracker) feed(c scopeCmd) []protocol.Diagnostic {
 	return t.scalarRedefinition(kw, c, toks)
 }
 
+// scalarDef is one curated scalar registry entry (chunt-otg.1): a
+// single-valued setting whose later definition silently replaces the earlier
+// one. Several keyword forms can map to the same setting (the vrf forwarding
+// pair), in which case they share one tracker key and redefinitions ACROSS
+// forms are flagged too. A form matches a resolved keyword exactly OR as its
+// prefix, so sub-forms (`encapsulation isl` under `encapsulation`) fold into
+// the base setting while keeping their differentiating words in the rendered
+// value (re-encapsulations compare "dot1q 10" vs "isl 10"). Settings
+// resolve via the keyword DB longest-prefix probe; forms absent from the DB
+// (description, bandwidth) resolve through resolveCommandKeyword's
+// first-token fallback, which lands on the same string.
+type scalarDef struct {
+	forms []string
+	label string // human-readable setting name for messages
+}
+
+var scalarRegistry = []scalarDef{
+	{forms: []string{"description"}, label: "description"},
+	{forms: []string{"mtu"}, label: "mtu"},
+	{forms: []string{"ip mtu"}, label: "ip mtu"},
+	{forms: []string{"ipv6 mtu"}, label: "ipv6 mtu"},
+	{forms: []string{"bandwidth"}, label: "bandwidth"},
+	{forms: []string{"speed"}, label: "speed"},
+	{forms: []string{"duplex"}, label: "duplex"},
+	// Re-encapsulation replaces the interface's entire frame format; every
+	// dot1q/isl/ppp/hdlc sub-form resolves longer in the DB but folds into
+	// the bare `encapsulation` tracker via prefix matching.
+	{forms: []string{"encapsulation"}, label: "encapsulation"},
+	{forms: []string{"switchport mode"}, label: "switchport mode"},
+	{forms: []string{"switchport access vlan"}, label: "switchport access vlan"},
+	{forms: []string{"vrf forwarding", "ip vrf forwarding"}, label: "vrf forwarding"},
+}
+
+// form returns the SHORTEST form matching kw — exact, or kw extending the
+// form with more words (encapsulation dot1q under encapsulation). The
+// shortest match keeps the differentiating sub-form words in the rendered
+// value; alternative forms (ip vrf forwarding) strip themselves fully.
+func (d *scalarDef) form(kw string) (string, bool) {
+	best, found := "", false
+	for _, f := range d.forms {
+		if kw == f || strings.HasPrefix(kw, f+" ") {
+			if !found || len(f) < len(best) {
+				best, found = f, true
+			}
+		}
+	}
+	return best, found
+}
+
+// key identifies the shared tracker slot for one setting (its first form).
+func (d *scalarDef) key() string { return d.forms[0] }
+
+// scalarOccurrence records the first definition of one registry scalar in a
+// scope, with its rendered value for replacement messages.
+type scalarOccurrence struct {
+	cmd scopeCmd
+	val string
+}
+
 // scalarRedefinition applies the curated redefined-setting rule for kw at
 // command occurrence c (whose tokens are toks), updating the scalar
 // trackers. Returns the diagnostic to emit, or nil.
 func (t *repeatedTracker) scalarRedefinition(kw string, c scopeCmd, toks []docToken) []protocol.Diagnostic {
-	switch kw {
-	case "hostname":
+	switch {
+	case kw == "hostname":
 		v := lastToken(toks)
 		if t.hasHost && v != t.hostVal {
 			return t.emitRedefined(c, t.host,
@@ -207,17 +271,20 @@ func (t *repeatedTracker) scalarRedefinition(kw string, c scopeCmd, toks []docTo
 		if !t.hasHost {
 			t.host, t.hostVal, t.hasHost = c, v, true
 		}
-	case "ip address":
+	case isIPAddressKw(kw):
 		if hasToken(toks, "secondary") {
 			return nil // additive secondaries are exempt
 		}
 		if t.hasPrimry {
+			// Values are rendered after the base "ip address" words (not the
+			// resolved longest form), so `ip address dhcp` compares as "dhcp".
+			priorVal, laterVal := argTailWords(t.primary, 2), argTailWords(c, 2)
 			return t.emitRedefined(c, t.primary,
-				fmt.Sprintf("multiple primary \"ip address\" definitions on this interface; this replaces %q", argTail(t.kw, t.primary)),
-				"ip address", argTail(t.kw, t.primary), argTail(t.kw, c))
+				fmt.Sprintf("multiple primary \"ip address\" definitions on this interface; this replaces %q", priorVal),
+				"ip address", priorVal, laterVal)
 		}
 		t.primary, t.hasPrimry = c, true
-	case "router-id", "bgp router-id":
+	case kw == "router-id" || kw == "bgp router-id":
 		v := lastToken(toks)
 		if t.hasRID && v != t.routerIDVal() {
 			return t.emitRedefined(c, t.routerID,
@@ -228,8 +295,49 @@ func (t *repeatedTracker) scalarRedefinition(kw string, c scopeCmd, toks []docTo
 			t.routerID, t.hasRID = c, true
 		}
 	}
+
+	// Curated registry scalars (chunt-otg.1): interface-scoped single-value
+	// settings. A different later value replaces the earlier one at merge
+	// time — an Error under the redefined-setting convention.
+	return t.registryRedefinition(kw, c)
+}
+
+// registryRedefinition applies the chunt-otg.1 scalar registry: a later
+// DIFFERENT value replaces the recorded one; the first occurrence is
+// recorded. Keyword-only lines carry no value and are ignored.
+func (t *repeatedTracker) registryRedefinition(kw string, c scopeCmd) []protocol.Diagnostic {
+	for i := range scalarRegistry {
+		def := &scalarRegistry[i]
+		form, ok := def.form(kw)
+		if !ok {
+			continue
+		}
+		val := argTailWords(c, len(strings.Fields(form)))
+		if val == "" {
+			return nil // keyword-only line carries no value to track
+		}
+		if prior, ok := t.scalars[def.key()]; ok {
+			if val != prior.val {
+				return t.emitRedefined(c, prior.cmd,
+					fmt.Sprintf("%s %q replaces %q; only the last definition takes effect", def.label, val, prior.val),
+					def.label, prior.val, val)
+			}
+			return nil // same value, different spelling: no replacement
+		}
+		t.scalars[def.key()] = scalarOccurrence{cmd: c, val: val}
+		return nil
+	}
 	return nil
 }
+
+// isIPAddressKw reports whether a resolved keyword is an "ip address ..."
+// form; every such form shares the primary-address tracker, so
+// `ip address dhcp` replacing a static primary is flagged too (chunt-otg.1).
+func isIPAddressKw(kw string) bool {
+	return kw == "ip address" || strings.HasPrefix(kw, "ip address ")
+}
+
+// registryValue is superseded by argTailWords (see below).
 
 // emitRedefined emits the redefined-setting Error for a scalar conflict
 // (msg is the established per-setting wording) and, in workspace mode,
@@ -293,21 +401,29 @@ func (t *repeatedTracker) routerIDVal() string {
 // clearNegated processes a negated_statement: the inner command's tracked
 // state is removed so a subsequent positive definition is not flagged. The
 // generic duplicate map key is the inner command's trimmed text; the
-// hostname, primary-address, and router-id trackers reset on their no-forms.
+// hostname, primary-address, and router-id trackers reset on their no-forms,
+// as does any matching registry scalar (no description, no mtu, no vrf
+// forwarding, ...).
 func (t *repeatedTracker) clearNegated(neg scopeCmd) {
 	inner := firstCommandChild(neg.node)
 	if inner == nil {
 		return
 	}
 	delete(t.seen, strings.TrimSpace(string(neg.content()[inner.StartByte():inner.EndByte()])))
-	switch repeatedKeyword(inner, neg.content(), t.kw) {
-	case "hostname":
+	kw := repeatedKeyword(inner, neg.content(), t.kw)
+	for i := range scalarRegistry {
+		if _, ok := scalarRegistry[i].form(kw); ok {
+			delete(t.scalars, scalarRegistry[i].key())
+		}
+	}
+	switch {
+	case kw == "hostname":
 		t.host, t.hostVal, t.hasHost = scopeCmd{}, "", false
-	case "ip address":
+	case isIPAddressKw(kw):
 		if !hasToken(commandTokens(inner, neg.content()), "secondary") {
 			t.primary, t.hasPrimry = scopeCmd{}, false
 		}
-	case "router-id", "bgp router-id":
+	case kw == "router-id" || kw == "bgp router-id":
 		t.routerID, t.hasRID = scopeCmd{}, false
 	}
 }
@@ -359,19 +475,22 @@ func hasToken(toks []docToken, s string) bool {
 	return false
 }
 
-// argTail renders the argument tokens after the leading kw words of a
-// command (e.g. "10.0.0.1 255.255.255.0" for `ip address 10.0.0.1
-// 255.255.255.0` with kw "ip address") for use in redefined-setting
-// messages.
-func argTail(kw *keyword.Set, c scopeCmd) string {
-	content := c.content()
-	toks := commandTokens(c.node, content)
-	kwWords := len(strings.Fields(repeatedKeyword(c.node, content, kw)))
-	if kwWords >= len(toks) {
+// argTailWords renders the argument tokens after the first n leading
+// tokens of a command (n = the matched keyword form's word count, e.g. 2 for
+// "ip address"). Dedicated *_statement nodes carry the keyword as an
+// anonymous child, so their tokens are ALREADY the value and n is ignored
+// (mtu_statement "mtu 1500" yields tokens [1500]; a one-word strip would
+// corrupt it to "" — chunt-otg.1).
+func argTailWords(c scopeCmd, n int) string {
+	toks := commandTokens(c.node, c.content())
+	if c.node.Kind() != "command_line" {
+		n = 0
+	}
+	if n >= len(toks) {
 		return ""
 	}
-	parts := make([]string, 0, len(toks)-kwWords)
-	for _, t := range toks[kwWords:] {
+	parts := make([]string, 0, len(toks)-n)
+	for _, t := range toks[n:] {
 		parts = append(parts, t.text)
 	}
 	return strings.Join(parts, " ")

@@ -586,3 +586,51 @@ func TestWorkspaceCompanionNotEmittedInFile(t *testing.T) {
 		t.Errorf("in-file conflict must not emit a companion, got %d: %+v", got, wsByCode(diags, "superseded-setting"))
 	}
 }
+
+// TestWorkspaceRegistryScalarAcrossFiles (chunt-otg.1): a registry scalar
+// (description) redefined in a second file on the same logical interface
+// follows the cross-file contract — redefined-setting Error on the later
+// definition in b, companion superseded-setting Warning on the first in a.
+func TestWorkspaceRegistryScalarAcrossFiles(t *testing.T) {
+	dir := wsSetup(t, map[string]string{
+		"a-base.ios.j2":  "interface Gi0/0\n description primary uplink\n!\n",
+		"b-iface.ios.j2": "interface Gi0/0\n description backup uplink\n!\n",
+	})
+	f := New()
+	defer f.Close()
+	pub, log := wsRecorder()
+
+	uriA := "file://" + filepath.Join(dir, "a-base.ios.j2")
+	uriB := "file://" + filepath.Join(dir, "b-iface.ios.j2")
+	wsOpen2(t, f, pub, dir, "a-base.ios.j2", "interface Gi0/0\n description primary uplink\n!\n")
+
+	// b: the Error on the later definition, with the registry's replacement
+	// wording and the first definition in a as relatedInformation.
+	setB := log.last[uriB]
+	if got := wsCodeCount(setB, "redefined-setting"); got != 1 {
+		t.Fatalf("b: want 1 redefined-setting Error, got %d: %+v", got, setB)
+	}
+	e := wsByCode(setB, "redefined-setting")[0]
+	if want := `description "backup uplink" replaces "primary uplink"`; !strings.Contains(e.Message, want) {
+		t.Errorf("b: message %q missing %q", e.Message, want)
+	}
+	if e.Severity != protocol.SeverityError {
+		t.Errorf("b: severity got %d, want Error (1)", e.Severity)
+	}
+	if len(e.RelatedInformation) != 1 || e.RelatedInformation[0].Location.URI != uriA {
+		t.Fatalf("b: relatedInformation should jump to a: %+v", e.RelatedInformation)
+	}
+
+	// a: the companion Warning on the first definition.
+	setA := log.last[uriA]
+	hits := wsByCode(setA, "superseded-setting")
+	if len(hits) != 1 {
+		t.Fatalf("a: want 1 superseded-setting Warning, got %d: %+v", len(hits), setA)
+	}
+	if want := `description "primary uplink" is superseded by "backup uplink" defined later in b-iface.ios.j2`; !strings.Contains(hits[0].Message, want) {
+		t.Errorf("a: companion message %q missing %q", hits[0].Message, want)
+	}
+	if got := wsCodeCount(setA, "redefined-setting"); got != 0 {
+		t.Errorf("a: want 0 redefined-setting, got %d", got)
+	}
+}
