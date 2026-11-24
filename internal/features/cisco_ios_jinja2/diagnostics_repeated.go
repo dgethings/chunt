@@ -184,70 +184,226 @@ func (t *repeatedTracker) feed(c scopeCmd) []protocol.Diagnostic {
 
 	// Generic exact duplicate: identical command text already seen in this
 	// scope. Emitted here (and no curated check) so an identical primary
-	// `ip address` pair yields exactly one warning.
-	if first, dup := t.seen[c.text()]; dup {
+	// `ip address` pair yields exactly one warning. The key includes the
+	// text-catch-all tail so banner/hash lines that differ only in the
+	// unlexed text are not mistaken for exact duplicates.
+	key := commandKeyText(c)
+	if first, dup := t.seen[key]; dup {
 		if t.crossFileOnly && first.doc.URI == c.doc.URI {
 			return nil // same-file duplicate: owned by the single-file pass
 		}
 		return []protocol.Diagnostic{repeatedDiag(c, first, "duplicate-command",
 			fmt.Sprintf("duplicate command %q; already defined earlier in this section", c.text()))}
 	}
-	t.seen[c.text()] = c
+	t.seen[key] = c
 
 	return t.scalarRedefinition(kw, c, toks)
 }
 
-// scalarDef is one curated scalar registry entry (chunt-otg.1): a
+// scalarDef is one curated scalar registry entry (chunt-otg.1/.2/.3/.4): a
 // single-valued setting whose later definition silently replaces the earlier
-// one. Several keyword forms can map to the same setting (the vrf forwarding
-// pair), in which case they share one tracker key and redefinitions ACROSS
-// forms are flagged too. A form matches a resolved keyword exactly OR as its
-// prefix, so sub-forms (`encapsulation isl` under `encapsulation`) fold into
-// the base setting while keeping their differentiating words in the rendered
-// value (re-encapsulations compare "dot1q 10" vs "isl 10"). Settings
-// resolve via the keyword DB longest-prefix probe; forms absent from the DB
-// (description, bandwidth) resolve through resolveCommandKeyword's
-// first-token fallback, which lands on the same string.
+// one. Matching is on the command's WORD PREFIX (leading token + leading
+// args via leadingAndArgs), not the resolved keyword — several of these
+// headers resolve to bare or truncated keywords (standby, timers, maximum,
+// ip domain-name → "ip"), and several carry a variable word inside the form
+// (the FHRP group number, the neighbor address), matched by "*". Several
+// keyword forms can map to the same setting (the vrf forwarding pair, the
+// enable secret/password pair), in which case they share one tracker key and
+// redefinitions ACROSS forms are flagged too.
 type scalarDef struct {
-	forms []string
+	// forms are command word sequences selecting this setting; "*" matches
+	// any single word. The FIRST form is the canonical tracker key, so
+	// cross-form settings share a slot regardless of which form matched.
+	forms [][]string
 	label string // human-readable setting name for messages
+	// subKey, when set, returns the SUB-SCOPE key for one occurrence (the
+	// FHRP group number, the neighbor address, the enable-secret level):
+	// conflicts are tracked per (setting, sub-scope) pair, so distinct
+	// groups/neighbors never interact.
+	subKey func(full []string) string
 }
 
 var scalarRegistry = []scalarDef{
-	{forms: []string{"description"}, label: "description"},
-	{forms: []string{"mtu"}, label: "mtu"},
-	{forms: []string{"ip mtu"}, label: "ip mtu"},
-	{forms: []string{"ipv6 mtu"}, label: "ipv6 mtu"},
-	{forms: []string{"bandwidth"}, label: "bandwidth"},
-	{forms: []string{"speed"}, label: "speed"},
-	{forms: []string{"duplex"}, label: "duplex"},
+	// Interface-scoped settings (chunt-otg.1).
+	{forms: [][]string{{"description"}}, label: "description"},
+	{forms: [][]string{{"mtu"}}, label: "mtu"},
+	{forms: [][]string{{"ip", "mtu"}}, label: "ip mtu"},
+	{forms: [][]string{{"ipv6", "mtu"}}, label: "ipv6 mtu"},
+	{forms: [][]string{{"bandwidth"}}, label: "bandwidth"},
+	{forms: [][]string{{"speed"}}, label: "speed"},
+	{forms: [][]string{{"duplex"}}, label: "duplex"},
 	// Re-encapsulation replaces the interface's entire frame format; every
-	// dot1q/isl/ppp/hdlc sub-form resolves longer in the DB but folds into
-	// the bare `encapsulation` tracker via prefix matching.
-	{forms: []string{"encapsulation"}, label: "encapsulation"},
-	{forms: []string{"switchport mode"}, label: "switchport mode"},
-	{forms: []string{"switchport access vlan"}, label: "switchport access vlan"},
-	{forms: []string{"vrf forwarding", "ip vrf forwarding"}, label: "vrf forwarding"},
+	// dot1q/isl/ppp/hdlc sub-form folds into the bare `encapsulation`
+	// tracker via word-prefix matching, keeping the type word in the value.
+	{forms: [][]string{{"encapsulation"}}, label: "encapsulation"},
+	{forms: [][]string{{"switchport", "mode"}}, label: "switchport mode"},
+	{forms: [][]string{{"switchport", "access", "vlan"}}, label: "switchport access vlan"},
+	{forms: [][]string{{"vrf", "forwarding"}, {"ip", "vrf", "forwarding"}}, label: "vrf forwarding"},
+
+	// Global-config settings (chunt-otg.3). Banner bodies and clock offsets
+	// ride the text-catch-all tail (see commandWords). enable secret/password
+	// share one tracker per LEVEL — both present for the same level is the
+	// weak-config conflict the issue asks to flag. Additive global commands
+	// (ip name-server, logging host, ntp server, ip domain list, snmp-server
+	// community) are deliberately absent: re-adds are legitimate.
+	{forms: [][]string{{"banner", "motd"}}, label: "banner motd"},
+	{forms: [][]string{{"banner", "exec"}}, label: "banner exec"},
+	{forms: [][]string{{"banner", "login"}}, label: "banner login"},
+	{forms: [][]string{{"clock", "timezone"}}, label: "clock timezone"},
+	{forms: [][]string{{"clock", "summer-time"}}, label: "clock summer-time"},
+	{forms: [][]string{{"ip", "domain-name"}}, label: "ip domain-name"},
+	{forms: [][]string{{"enable", "secret"}, {"enable", "password"}}, label: "enable secret/password",
+		subKey: func(full []string) string {
+			if len(full) > 3 && full[2] == "level" {
+				return full[3]
+			}
+			return "0"
+		}},
+	{forms: [][]string{{"snmp-server", "location"}}, label: "snmp-server location"},
+	{forms: [][]string{{"snmp-server", "contact"}}, label: "snmp-server contact"},
+	{forms: [][]string{{"ip", "default-gateway"}}, label: "ip default-gateway"},
+	{forms: [][]string{{"ip", "ssh", "version"}}, label: "ip ssh version"},
+	{forms: [][]string{{"logging", "buffered"}}, label: "logging buffered"},
+	{forms: [][]string{{"logging", "source-interface"}}, label: "logging source-interface"},
+
+	// FHRP per-group scalars (chunt-otg.2): scalar per (interface, group)
+	// pair — the group number sub-keys the tracker, so distinct groups never
+	// interact. Plain preempts carry no value and are ignored; `preempt
+	// delay N` is tracked.
+	{forms: [][]string{{"standby", "*", "ip"}}, label: "standby ip",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"standby", "*", "priority"}}, label: "standby priority",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"standby", "*", "preempt"}}, label: "standby preempt",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"standby", "*", "authentication"}}, label: "standby authentication",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"vrrp", "*", "ip"}}, label: "vrrp ip",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"vrrp", "*", "priority"}}, label: "vrrp priority",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"glbp", "*", "ip"}}, label: "glbp ip",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"glbp", "*", "priority"}}, label: "glbp priority",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"glbp", "*", "preempt"}}, label: "glbp preempt",
+		subKey: func(full []string) string { return full[1] }},
+
+	// Routing-process scalars (chunt-otg.4): tracked per process section (a
+	// router section is the tracker scope). Toggles (bgp log-neighbor-changes,
+	// auto-summary, no synchronization) have no conflicting value — a repeat
+	// is duplicate-command's business — and OSPF `area N range` is additive
+	// (multiple summaries per area coexist), so both are deliberately
+	// absent. Neighbor scalars sub-key by the neighbor address, so different
+	// neighbors never interact.
+	{forms: [][]string{{"timers", "bgp"}}, label: "timers bgp"},
+	{forms: [][]string{{"distance", "bgp"}}, label: "distance bgp"},
+	{forms: [][]string{{"maximum"}}, label: "maximum-paths"},
+	{forms: [][]string{{"neighbor", "*", "remote-as"}}, label: "neighbor remote-as",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"neighbor", "*", "description"}}, label: "neighbor description",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"neighbor", "*", "update-source"}}, label: "neighbor update-source",
+		subKey: func(full []string) string { return full[1] }},
+	{forms: [][]string{{"neighbor", "*", "password"}}, label: "neighbor password",
+		subKey: func(full []string) string { return full[1] }},
 }
 
-// form returns the SHORTEST form matching kw — exact, or kw extending the
-// form with more words (encapsulation dot1q under encapsulation). The
-// shortest match keeps the differentiating sub-form words in the rendered
-// value; alternative forms (ip vrf forwarding) strip themselves fully.
-func (d *scalarDef) form(kw string) (string, bool) {
-	best, found := "", false
+// findForm returns the first form whose words prefix-match full ("*"
+// matches any single word), or nil.
+func (d *scalarDef) findForm(full []string) []string {
 	for _, f := range d.forms {
-		if kw == f || strings.HasPrefix(kw, f+" ") {
-			if !found || len(f) < len(best) {
-				best, found = f, true
-			}
+		if wordsPrefixMatchWild(full, f) {
+			return f
 		}
 	}
-	return best, found
+	return nil
 }
 
-// key identifies the shared tracker slot for one setting (its first form).
-func (d *scalarDef) key() string { return d.forms[0] }
+// wordsPrefixMatchWild reports whether the first len(words) entries of full
+// match words, where "*" matches any single word.
+func wordsPrefixMatchWild(full, words []string) bool {
+	if len(full) < len(words) {
+		return false
+	}
+	for i, w := range words {
+		if w != "*" && full[i] != w {
+			return false
+		}
+	}
+	return true
+}
+
+// trackerKey is the scalars map key for one occurrence: the canonical (first)
+// form plus the sub-scope key when the def defines one. Canonical-form keying
+// is what makes cross-form settings share a slot (enable secret vs password,
+// vrf forwarding vs ip vrf forwarding).
+func (d *scalarDef) trackerKey(full []string) string {
+	k := strings.Join(d.forms[0], "\x00")
+	if d.subKey != nil {
+		k += "\x00" + d.subKey(full)
+	}
+	return k
+}
+
+// commandWords returns the command's word sequence for registry matching:
+// the first child's text (the leading keyword — including the anonymous
+// keyword child of dedicated *_statement nodes) followed by the text of the
+// remaining named children (the args), PLUS the catch-all text node that
+// follows the command_line when present — the grammar's overflow for words
+// it cannot lex (banner bodies, negative clock offsets, password hashes,
+// maximum-paths's hyphenated tail). Nil when there is no leading word.
+func commandWords(c scopeCmd) []string {
+	n, content := c.node, c.content()
+	if n.ChildCount() == 0 {
+		return nil
+	}
+	first := n.Child(0)
+	if first == nil {
+		return nil
+	}
+	leading := string(content[first.StartByte():first.EndByte()])
+	if leading == "" {
+		return nil
+	}
+	full := []string{leading}
+	for i := uint(1); i < n.ChildCount(); i++ {
+		ch := n.Child(i)
+		if ch == nil || !ch.IsNamed() {
+			continue
+		}
+		full = append(full, string(content[ch.StartByte():ch.EndByte()]))
+	}
+	if sib := n.NextNamedSibling(); sib != nil && sib.Kind() == "text" {
+		if txt := strings.TrimSpace(string(content[sib.StartByte():sib.EndByte()])); txt != "" {
+			full = append(full, txt)
+		}
+	}
+	return full
+}
+
+// commandKeyText is the duplicate-detection key: the command's own text plus
+// its text-catch-all sibling, so lines that differ only in the unlexed tail
+// (banner bodies, hashes) are not mistaken for exact duplicates.
+func commandKeyText(c scopeCmd) string {
+	txt := c.text()
+	if sib := c.node.NextNamedSibling(); sib != nil && sib.Kind() == "text" {
+		txt += " " + strings.TrimSpace(string(c.content()[sib.StartByte():sib.EndByte()]))
+	}
+	return txt
+}
+
+// value renders the setting's value tail: the words after the matched form
+// (statement nodes carry the keyword as an anonymous Child(0), so their
+// words are already the value; the text-catch-all tail rides in full via
+// commandWords).
+func (d *scalarDef) value(c scopeCmd, full []string) string {
+	form := d.findForm(full)
+	if form == nil {
+		return ""
+	}
+	return strings.Join(full[len(form):], " ")
+}
 
 // scalarOccurrence records the first definition of one registry scalar in a
 // scope, with its rendered value for replacement messages.
@@ -296,27 +452,32 @@ func (t *repeatedTracker) scalarRedefinition(kw string, c scopeCmd, toks []docTo
 		}
 	}
 
-	// Curated registry scalars (chunt-otg.1): interface-scoped single-value
-	// settings. A different later value replaces the earlier one at merge
-	// time — an Error under the redefined-setting convention.
-	return t.registryRedefinition(kw, c)
+	// Curated registry scalars (chunt-otg.1/.2/.3/.4): interface, global,
+	// FHRP-group, and routing-process single-value settings. A different
+	// later value replaces the earlier one at merge time — an Error under
+	// the redefined-setting convention.
+	return t.registryRedefinition(c)
 }
 
-// registryRedefinition applies the chunt-otg.1 scalar registry: a later
+// registryRedefinition applies the curated scalar registry: a later
 // DIFFERENT value replaces the recorded one; the first occurrence is
 // recorded. Keyword-only lines carry no value and are ignored.
-func (t *repeatedTracker) registryRedefinition(kw string, c scopeCmd) []protocol.Diagnostic {
+func (t *repeatedTracker) registryRedefinition(c scopeCmd) []protocol.Diagnostic {
+	full := commandWords(c)
+	if full == nil {
+		return nil
+	}
 	for i := range scalarRegistry {
 		def := &scalarRegistry[i]
-		form, ok := def.form(kw)
-		if !ok {
+		if def.findForm(full) == nil {
 			continue
 		}
-		val := argTailWords(c, len(strings.Fields(form)))
+		val := def.value(c, full)
 		if val == "" {
 			return nil // keyword-only line carries no value to track
 		}
-		if prior, ok := t.scalars[def.key()]; ok {
+		key := def.trackerKey(full)
+		if prior, ok := t.scalars[key]; ok {
 			if val != prior.val {
 				return t.emitRedefined(c, prior.cmd,
 					fmt.Sprintf("%s %q replaces %q; only the last definition takes effect", def.label, val, prior.val),
@@ -324,7 +485,7 @@ func (t *repeatedTracker) registryRedefinition(kw string, c scopeCmd) []protocol
 			}
 			return nil // same value, different spelling: no replacement
 		}
-		t.scalars[def.key()] = scalarOccurrence{cmd: c, val: val}
+		t.scalars[key] = scalarOccurrence{cmd: c, val: val}
 		return nil
 	}
 	return nil
@@ -337,7 +498,7 @@ func isIPAddressKw(kw string) bool {
 	return kw == "ip address" || strings.HasPrefix(kw, "ip address ")
 }
 
-// registryValue is superseded by argTailWords (see below).
+// registryValue was superseded by argTailWords, then by scalarDef.value.
 
 // emitRedefined emits the redefined-setting Error for a scalar conflict
 // (msg is the established per-setting wording) and, in workspace mode,
@@ -409,11 +570,13 @@ func (t *repeatedTracker) clearNegated(neg scopeCmd) {
 	if inner == nil {
 		return
 	}
-	delete(t.seen, strings.TrimSpace(string(neg.content()[inner.StartByte():inner.EndByte()])))
+	delete(t.seen, commandKeyText(scopeCmd{node: inner, doc: neg.doc}))
 	kw := repeatedKeyword(inner, neg.content(), t.kw)
-	for i := range scalarRegistry {
-		if _, ok := scalarRegistry[i].form(kw); ok {
-			delete(t.scalars, scalarRegistry[i].key())
+	if full := commandWords(scopeCmd{node: inner, doc: neg.doc}); full != nil {
+		for i := range scalarRegistry {
+			if scalarRegistry[i].findForm(full) != nil {
+				delete(t.scalars, scalarRegistry[i].trackerKey(full))
+			}
 		}
 	}
 	switch {

@@ -67,6 +67,9 @@ const (
 	KindIPsecProfile  Kind = "ipsec-profile"
 	KindZone          Kind = "zone"
 	KindParameterMap  Kind = "parameter-map"
+	// BGP peer-group definitions (`neighbor PG1 peer-group`, chunt-otg.4);
+	// membership lines (`neighbor 10.0.0.2 peer-group PG1`) reference them.
+	KindPeerGroup Kind = "peer-group"
 )
 
 // Symbol is a named definition site extracted from a parsed document.
@@ -389,6 +392,10 @@ func extractFlat(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 		return extractACL(uri, n, content)
 	case "hostname_statement":
 		return extractHostname(uri, n, content)
+	case "neighbor_statement":
+		// BGP peer-group definitions only (`neighbor PG1 peer-group`);
+		// membership lines and neighbor scalars are refs/tracked state.
+		return extractPeerGroup(uri, n, content)
 	case "rtr_statement", "text":
 		// text: the `-range NAME` catch-all after a bare `time` command_line
 		// (grammar v0.3.1 gap — see extractInfrastructure).
@@ -401,6 +408,9 @@ func extractFlat(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
 			return sym, true
 		}
 		if sym, ok := extractInfrastructure(uri, n, content); ok {
+			return sym, true
+		}
+		if sym, ok := extractPeerGroup(uri, n, content); ok {
 			return sym, true
 		}
 		return extractNamedACLCommandLine(uri, n, content)
@@ -1016,6 +1026,26 @@ func isAllDigits(s string) bool {
 	return true
 }
 
+// extractPeerGroup extracts a BGP peer-group DEFINITION from a flat
+// command_line: `neighbor PG1 peer-group` — exactly two args, peer-group
+// last (chunt-otg.4). Membership lines carry a third arg (the group name)
+// and are reference sites, not definitions. Duplicate-definition warnings
+// follow from the shared pass; membership resolution via the shared
+// undefined pass works across files in workspace mode.
+func extractPeerGroup(uri string, n *sitter.Node, content []byte) (Symbol, bool) {
+	leading, args, argNodes := leadingAndArgs(n, content)
+	if leading != "neighbor" || len(args) != 2 || args[1] != "peer-group" {
+		return Symbol{}, false
+	}
+	return Symbol{
+		Kind:      KindPeerGroup,
+		Name:      args[0],
+		URI:       uri,
+		Range:     nodeRange(n),
+		NameRange: nodeRange(argNodes[0]),
+	}, true
+}
+
 // extractNamedACLCommandLine recovers an ACL definition from an
 // `ip access-list <standard|extended> NAME` line that the grammar parsed
 // as a flat command_line rather than a hierarchical ip_access_list_section.
@@ -1232,10 +1262,15 @@ var refSpecs = []refSpec{
 	// name follows a keyword at a variable position, so these scan.
 	// (`table-map NAME` also cites a route-map but lexes as command_line(table)
 	// + an unnamed text node — needs a grammar statement rule; see the
-	// grammar-repo bead referenced from chunt-otg.11.)
+	// grammar-repo bead referenced from chunt-otg.11.) peer-group (chunt-
+	// otg.4) rides the same scan: `neighbor <ip> peer-group PG1` cites
+	// PG1; the DEFINITION line `neighbor PG1 peer-group` has peer-group
+	// LAST, so the scan emits nothing for it (it registers a KindPeerGroup
+	// symbol via extractPeerGroup instead).
 	{
 		Leading: []string{"neighbor"}, Kind: KindRouteMap,
-		Keywords: []string{"route-map", "advertise-map", "unsuppress-map", "exist-map", "non-exist-map"},
+		Keywords:     []string{"route-map", "advertise-map", "unsuppress-map", "exist-map", "non-exist-map", "peer-group"},
+		KeywordKinds: map[string]Kind{"peer-group": KindPeerGroup},
 	},
 	{Leading: []string{"redistribute"}, Kind: KindRouteMap, Keywords: []string{"route-map"}},
 	{Leading: []string{"distribute-list", "route-map"}, ArgIndex: 0, Kind: KindRouteMap},
