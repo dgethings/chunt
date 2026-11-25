@@ -1,0 +1,24 @@
+# Cursor marks for crlf_line_endings.cfg — the CRLF-input fixture
+# (chunt-ro9). The .cfg bytes are CRLF-terminated (git keeps them
+# byte-exact via .gitattributes); the document layer normalizes them to LF
+# before parsing, so these coordinates — 0-indexed (LSP Position
+# semantics) — are exactly what a real editor sends for the CRLF buffer:
+# per-line characters address identical text, and no editor can place a
+# cursor on the CR itself.
+#
+# Format:  <line>:<col> <feature> <optional free-form note>
+
+# hover marks ------------------------------------------------------------
+5:0 hover        interface keyword -> docstring
+
+# definition / references marks ------------------------------------------
+6:17 definition     on acl reference "ACL1" -> its definition at 2:24
+9:17 definition     on undefined acl reference "ACL2" -> <none>
+6:17 references     on acl reference "ACL1" -> its own site only
+2:24 references-decl on the acl definition "ACL1" -> declaration + usage
+
+# completion marks -------------------------------------------------------
+6:1 completion   config-if scope (inside the interface body)
+
+# documentSymbol marks ---------------------------------------------------
+0:0 documentSymbol full outline (cursor is irrelevant; 0:0 is the placeholder)

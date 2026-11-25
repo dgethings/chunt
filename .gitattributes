@@ -5,3 +5,7 @@
 *.cfg text eol=lf
 *.marks text eol=lf
 *.golden text eol=lf
+# The one exception is the CRLF fixture itself (chunt-ro9): its \r\n bytes
+# ARE the test input, so it must check out byte-exact on every platform —
+# -text disables all EOL conversion for it (last match wins).
+crlf_line_endings.cfg -text

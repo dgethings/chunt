@@ -58,11 +58,45 @@ func TestGolden(t *testing.T) {
 	}
 	sort.Strings(cfgs)
 	for _, cfgPath := range cfgs {
-		cfgPath := cfgPath
 		name := strings.TrimSuffix(filepath.Base(cfgPath), ".cfg")
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			runGolden(t, name)
+		})
+	}
+}
+
+// TestGoldenCRLF re-runs every fixture with CRLF line endings and requires
+// byte-identical output to the LF goldens (chunt-ro9). The document layer
+// normalizes CRLF before parsing, so diagnostic ranges and every marked
+// position-based feature (hover, completion, definition, references,
+// documentSymbol) must not shift relative to the LF view of the same text.
+// This sweeps the whole corpus mechanically — crlf_line_endings.cfg is the
+// committed, always-on CRLF instance of the same guarantee.
+func TestGoldenCRLF(t *testing.T) {
+	cfgs, err := filepath.Glob(filepath.Join(goldenDir, "*.cfg"))
+	if err != nil {
+		t.Fatalf("glob fixtures: %v", err)
+	}
+	if len(cfgs) == 0 {
+		t.Fatalf("no *.cfg fixtures found in %s", goldenDir)
+	}
+	sort.Strings(cfgs)
+	for _, cfgPath := range cfgs {
+		name := strings.TrimSuffix(filepath.Base(cfgPath), ".cfg")
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			src, err := os.ReadFile(cfgPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", cfgPath, err)
+			}
+			// Canonical LF -> CRLF, idempotently: crlf_line_endings.cfg
+			// already carries CRLF bytes and must not be double-converted
+			// to \r\r\n.
+			lf := bytes.ReplaceAll(src, []byte("\r\n"), []byte("\n"))
+			crlf := bytes.ReplaceAll(lf, []byte("\n"), []byte("\r\n"))
+			// Compare-only: -update must never write CRLF-derived bytes.
+			runGoldenContent(t, name, crlf, false)
 		})
 	}
 }
@@ -76,6 +110,14 @@ func runGolden(t *testing.T, name string) {
 	if err != nil {
 		t.Fatalf("read %s: %v", cfgPath, err)
 	}
+	runGoldenContent(t, name, src, *updateGoldens)
+}
+
+// runGoldenContent runs the full pipeline over the given source bytes
+// (named for golden output and mark lookup) and either rewrites
+// <name>.golden (update) or compares against it.
+func runGoldenContent(t *testing.T, name string, src []byte, update bool) {
+	t.Helper()
 
 	f := cisco_ios_jinja2.New()
 	defer f.Close()
@@ -148,7 +190,7 @@ func runGolden(t *testing.T, name string) {
 
 	got := out.Bytes()
 	goldenPath := filepath.Join(goldenDir, name+".golden")
-	if *updateGoldens {
+	if update {
 		if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
 			t.Fatalf("write %s: %v", goldenPath, err)
 		}

@@ -146,6 +146,22 @@ The normal test run (`make test-lsp`, i.e. `go test ./...`) compares without
 touching the files. A mismatch fails with a unified-style diff naming the
 changed lines.
 
+## CRLF coverage
+
+`crlf_line_endings.cfg` is the one fixture whose `.cfg` bytes are deliberately
+**CRLF-terminated** (git keeps them byte-exact via a `-text` exception in the
+repo root's `.gitattributes`; every other fixture is forced to LF). The
+document layer normalizes CRLF to LF before parsing, so its golden — the
+missing-`}}` error at `0:12-12`, not the shifted `0:12-13` raw CRLF parsing
+would produce — pins that normalization (`chunt-ro9`).
+
+`TestGoldenCRLF` in `golden_test.go` sweeps the guarantee across the whole
+corpus: it re-runs every fixture with its content converted to CRLF and
+requires **byte-identical** output to the LF golden, covering diagnostics and
+every marked position-based feature (hover, completion, definition,
+references, documentSymbol). It is compare-only — `-update` never writes
+CRLF-derived goldens.
+
 ## Notes on the keyword database
 
 The keyword database (keywords.go) is noisy: common words such as `match`,

@@ -62,6 +62,11 @@ site-a.ios.j2:20:1:  [chunt] running version and configured version mismatch
 
 Same diagnostics show up as red/yellow squiggles in any LSP-aware editor.
 
+Line endings are a non-issue: CRLF content (a Windows editor saving an
+`.ios.j2` file) is normalized to LF in chunt's document layer before
+parsing, so diagnostic ranges, hover, completion, definition, and
+references behave identically for CRLF and LF buffers.
+
 ### Multi-file templates (directory = one device config)
 
 A network device's configuration is commonly split across several template

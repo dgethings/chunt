@@ -49,8 +49,9 @@ func (s *Server) DidChange(ctx context.Context, params protocol.DidChangeTextDoc
 	l := slog.With("message", "didChange", "uri", doc.URI, "language", doc.LanguageID)
 
 	for _, change := range params.ContentChanges {
-		doc.Content = []byte(change.Text)
-		doc.Version = params.TextDocument.Version
+		// SetContent (not a direct Content assignment) so a CRLF buffer
+		// stays normalized across every didChange (chunt-ro9).
+		doc.SetContent([]byte(change.Text), params.TextDocument.Version)
 		s.documents.Put(doc)
 
 		f, err := s.features.Route(doc.LanguageID)

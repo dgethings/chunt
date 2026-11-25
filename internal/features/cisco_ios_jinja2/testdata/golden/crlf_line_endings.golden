@@ -1,0 +1,37 @@
+# golden for crlf_line_endings.cfg — DO NOT HAND-EDIT; regenerate with:
+#   go test ./internal/features/cisco_ios_jinja2/ -run '^TestGolden/crlf_line_endings$' -update
+
+## diagnostics
+ERROR    missing-}}             0:12-12 | missing "}}"
+WARNING  undefined-acl          9:17-21 | undefined acl "ACL2"
+
+## hover @ 5:0  interface keyword -> docstring
+kind=markdown
+To configure an interface type and to enter interface configuration mode, use the interface command in the appropriate configuration mode.
+
+**Usage Guidelines**
+
+This command does not have a no form except for Cisco ASR 901 Series Aggregation Services Routers. The table below displays the keywords that represent the types of interfaces that can be configured with the interface command. Replace the type argument with the appropriate keyword from the table. Table 3. Interface Type Keywords Keyword Interface Type analysis-module Analysis module interface. The analysis module interface is a Fast Ethernet interface on the router that connects to the internal interface on the Network Analysis Module (NAM). This interface cannot be configured for subinterfaces or for speed, duplex mode, and simil
+… [truncated, 15228 bytes total]
+
+## definition @ 6:17  on acl reference "ACL1" -> its definition at 2:24
+crlf_line_endings.cfg 2:24-28
+
+## definition @ 9:17  on undefined acl reference "ACL2" -> <none>
+<none>
+
+## references @ 6:17  on acl reference "ACL1" -> its own site only
+crlf_line_endings.cfg 6:17-21
+
+## references-decl @ 2:24  on the acl definition "ACL1" -> declaration + usage
+crlf_line_endings.cfg 2:24-28
+crlf_line_endings.cfg 6:17-21
+
+## completion @ 6:1  config-if scope (inside the interface body)
+2620 items  sha256:e3b3c1ec25d1c4da
+
+## documentSymbol  full outline (cursor is irrelevant; 0:0 is the placeholder)
+kind=3/Namespace ACL1 detail="acl" 2:0-4:1 sel=2:24-28
+kind=11/Interface Gi0/0 detail="interface" 5:0-7:1 sel=5:10-15
+kind=11/Interface Gi1/0 detail="interface" 8:0-10:1 sel=8:10-15
+kind=13/Variable r detail="hostname" 0:0-10 sel=0:9-10
