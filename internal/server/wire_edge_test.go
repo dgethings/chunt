@@ -448,6 +448,133 @@ func (w *rawWire) recv() []byte {
 	return buf
 }
 
+// TestWire_PipelinedHandshake locks in the fix for chunt-5ks: a client
+// that pipelines — initialize, initialized, and didOpen, all framed and
+// written in a SINGLE write — must get the full session. jrpc2 resolves
+// Assign when a message batch is dequeued, which can run ahead of earlier
+// batches' handlers, so the pre-fix assign-time stateGate rejected
+// everything pipelined after initialize: didOpen never stored the document
+// (no diagnostics push) and later requests failed with -32002. The gate
+// now tracks "initialize seen on the wire" in stream order and lets the
+// pipelined followers through.
+//
+// Completion is deliberately NOT in the pipelined batch: jrpc2 does not
+// constrain dispatch order, so a request pipelined behind didOpen could
+// legitimately run before didOpen's handler stores the document. Sending
+// it after the handshake and didOpen are observed keeps the test
+// deterministic while still pinning the original repro's end state —
+// completion works on the pipelined session.
+func TestWire_PipelinedHandshake(t *testing.T) {
+	t.Parallel()
+	w := newRawWire(t)
+
+	mustJSON := func(v any) string {
+		t.Helper()
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("marshal params: %v", err)
+		}
+		return string(b)
+	}
+	bodies := []string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":` + mustJSON(map[string]any{
+			"clientInfo": map[string]any{"name": "pipelined-client", "version": "0.0"},
+		}) + `}`,
+		`{"jsonrpc":"2.0","method":"initialized"}`,
+		`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":` + mustJSON(protocol.DidOpenTextDocumentParams{
+			TextDocument: protocol.TextDocumentItem{
+				URI:        wireURI,
+				LanguageID: "cisco_ios_jinja2",
+				Version:    1,
+				Text:       wireFixtureFixed,
+			},
+		}) + `}`,
+	}
+
+	// ONE write for the whole batch — the pipelining that broke the
+	// assign-time gate. (net.Pipe is synchronous, so this blocks until the
+	// server's read loop consumes the bytes.)
+	var batch strings.Builder
+	for _, b := range bodies {
+		fmt.Fprintf(&batch, "Content-Length: %d\r\n\r\n%s", len(b), b)
+	}
+	if _, err := io.WriteString(w.conn, batch.String()); err != nil {
+		t.Fatalf("write pipelined batch: %v", err)
+	}
+
+	// Collect the initialize response and the didOpen diagnostics push, in
+	// whichever order they land on the wire.
+	var initOK, pushOK bool
+	for !(initOK && pushOK) {
+		var msg struct {
+			ID     *int `json:"id"`
+			Result struct {
+				ServerInfo struct {
+					Name string `json:"name"`
+				} `json:"serverInfo"`
+			} `json:"result"`
+			Error *struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+			Method string `json:"method"`
+		}
+		if err := json.Unmarshal(w.recv(), &msg); err != nil {
+			t.Fatalf("decode pipelined response: %v", err)
+		}
+		switch {
+		case msg.Method == "textDocument/publishDiagnostics":
+			pushOK = true // didOpen ran: the clean fixture's terminal push
+		case msg.ID == nil:
+			// Some other server-initiated message; ignore.
+		case *msg.ID == 1:
+			if msg.Error != nil {
+				t.Fatalf("pipelined initialize failed: %v", msg.Error)
+			}
+			if name := msg.Result.ServerInfo.Name; name != "chunt" {
+				t.Errorf("pipelined initialize serverInfo.name = %q, want %q", name, "chunt")
+			}
+			initOK = true
+		}
+	}
+	if !pushOK {
+		t.Error("no publishDiagnostics push after pipelined didOpen, want the clean-fixture push")
+	}
+
+	// The pipelined session is fully usable: a completion request on the
+	// trailing empty top-level line (the same position TestWire_Completion
+	// uses) returns the keyword list, not "document not found".
+	lastLine := uint(strings.Count(wireFixtureFixed, "\n"))
+	w.send(`{"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":` + mustJSON(protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: wireURI},
+			Position:     protocol.Position{Line: lastLine, Character: 0},
+		},
+	}) + `}`)
+	var comp struct {
+		ID     *int `json:"id"`
+		Result struct {
+			Items []protocol.CompletionItem `json:"items"`
+		} `json:"result"`
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.recv(), &comp); err != nil {
+		t.Fatalf("decode completion response: %v", err)
+	}
+	if comp.ID == nil || *comp.ID != 2 {
+		t.Errorf("completion response id = %v, want 2", comp.ID)
+	}
+	if comp.Error != nil {
+		t.Fatalf("completion on pipelined session failed: %v", comp.Error)
+	}
+	if len(comp.Result.Items) == 0 {
+		t.Error("completion on pipelined session returned no items, want the keyword list")
+	}
+}
+
 // TestWire_RawMalformedBody feeds the server a frame whose body is not
 // valid JSON. jrpc2 answers with a JSON-RPC error addressed to id null
 // (code -32700 ParseError, message "invalid request value") and keeps the

@@ -34,7 +34,17 @@ type Server struct {
 
 	stateMu sync.Mutex
 	state   serverState
-	version string
+	// initSeen records that an initialize message has been SEEN on the
+	// wire, independently of whether its handler has completed. jrpc2
+	// assigns message handlers in stream order (batches are dequeued FIFO
+	// and assigned under the server's queue lock) but explicitly does not
+	// constrain dispatch order, so "initialize handler finished" cannot be
+	// observed reliably when messages are pipelined after initialize in a
+	// single write (chunt-5ks). The stateGate assigner uses this flag to
+	// let stream-order followers of initialize through the pre-initialize
+	// gate while the handshake is still in flight.
+	initSeen bool
+	version  string
 }
 
 // New creates a Server with no features registered. Callers register the
@@ -71,4 +81,21 @@ func (s *Server) getState() serverState {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 	return s.state
+}
+
+// markInitializeSeen records that an initialize message was assigned —
+// seen on the wire. Called by the stateGate assigner, which runs in stream
+// order, so once this is set every message assigned afterwards follows
+// initialize in the stream.
+func (s *Server) markInitializeSeen() {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+	s.initSeen = true
+}
+
+// initializeSeen reports whether an initialize message has been assigned.
+func (s *Server) initializeSeen() bool {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+	return s.initSeen
 }
