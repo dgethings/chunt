@@ -17,3 +17,4 @@ go.work.sum
 .dolt/
 *.db
 .beads-credential-key
+.beads.gate.lock
