@@ -79,15 +79,11 @@ func (f *CiscoIOSFeature) Completion(ctx context.Context, doc *document.Document
 		l.Error("cannot find tree")
 		return nil, nil
 	}
-	slog.Debug("current position", "LINE", pos.Line, "COLOMN", pos.Character)
-
 	node := ast.FindNodeAtPosition(tree.RootNode(), pos.Line, pos.Character)
 	if node == nil {
 		l.Error("cannot find section", "line", pos.Line, "column", pos.Character)
 		return nil, nil
 	}
-	l.Debug("where am i?", "node", node.GrammarName(), "kind", node.Kind(), "line", pos.Line, "char", pos.Character)
-
 	switch node.Kind() {
 	case "value", "text", "eos", "comment", "ios_comment":
 		return nil, nil
